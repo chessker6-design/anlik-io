@@ -1,58 +1,8 @@
 [
   {
-    "id": "ornek-oyun",
-    "title": "Neon Sızıntısı",
-    "category": "MACERA",
-    "image": "https://picsum.photos/seed/ornek1/400/500",
-    "description": "N8N otomasyonu tarafından oluşturulan örnek veri sızıntısı simülasyonu. Terminale erişim sağla ve ağdan çıkış yap."
-  },
-  {
-    "id": "hizli-yaris",
-    "title": "Hızlı Yarış: Turbo",
-    "category": "YARIŞ",
-    "image": "https://picsum.photos/seed/yaris/400/500",
-    "description": "Zorlu pistlerde rakiplerini geride bırak."
-  },
-  {
-    "id": "zeka-bulmacasi",
-    "title": "Küpün Sırrı",
-    "category": "ZEKA",
-    "image": "https://picsum.photos/seed/zeka/400/500",
-    "description": "Zorlu mantık bulmacalarını çöz. Zekanı test et."
-  },
-  {
-    "id": "uzay-savunmasi",
-    "title": "Galaktik Savunma",
-    "category": "AKSİYON",
-    "image": "https://picsum.photos/seed/aksiyon/400/500",
-    "description": "Gezegenini istiladan koru."
-  },
-  {
-    "id": "son-samuray",
-    "title": "Son Samuray",
-    "category": "aksiyon",
-    "image": "https://picsum.photos/seed/samuray/400/500",
-    "description": "Gölgelerde ilerleyen efsane."
-  },
-  {
-    "id": "ciftlik-macerasi",
-    "title": "Çiftlik Macerası",
-    "category": "simülasyon",
-    "image": "https://picsum.photos/seed/ciftlik/400/500",
-    "description": "Kendi büyük çiftliğini yönet."
-  },
-  {
-    "id": "seker-patlatma",
-    "title": "Şeker Patlatma",
-    "category": "arcade",
-    "image": "https://picsum.photos/seed/seker/400/500",
-    "description": "Aynı renkleri eşleştir ve puan topla."
-  },
-  {
-    "id": "orta-cag-kralligi",
-    "title": "Orta Çağ Krallığı",
-    "category": "strateji",
-    "image": "https://picsum.photos/seed/krallik/400/500",
-    "description": "Kendi imparatorluğunu kur ve savaş."
+    "id": "neon-kacis",
+    "isim": "Neon Kaçış",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/102/400/400"
   }
 ]

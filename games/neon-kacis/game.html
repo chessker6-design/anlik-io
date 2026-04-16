@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Kaçış</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f0f13;
+            /* Sitenin temasına uygun dark arka plan */
+            color: white;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            /* Scroll barlar çıkmasın */
+            touch-action: none;
+            /* Mobilde dokunmatik kaydırmayı iptal et */
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #1a1a2e;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+            /* Tıklamalar UI içinden canvasa geçsin */
+            width: 100%;
+        }
+
+        .score-text {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00f3ff;
+            color: #00f3ff;
+        }
+
+        .high-score-text {
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 19, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid #ff2a2a;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(255, 42, 42, 0.4);
+        }
+
+        h2 {
+            color: #ff2a2a;
+            margin-top: 0;
+        }
+
+        button {
+            background: #00f3ff;
+            color: #0f0f13;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui">
+        <div class="score-text" id="scoreDisplay">0</div>
+        <div class="high-score-text">En Yüksek: <span id="highScoreDisplay">0</span></div>
+    </div>
+
+    <div id="gameOverScreen">
+        <h2>ÇARPIŞMA!</h2>
+        <p>Skorun: <span id="finalScore">0</span></p>
+        <button onclick="resetGame()">Tekrar Oyna</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScore = document.getElementById('finalScore');
+
+        // Ekran boyutunu ayarla (Mobilde tam ekran, PC'de dikey telefon ekranı gibi)
+        function resizeCanvas() {
+            canvas.width = window.innerWidth > 500 ? 400 : window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Oyun Değişkenleri
+        let frames = 0;
+        let score = 0;
+        let highScore = localStorage.getItem('neonKacisHighScore') || 0;
+        highScoreDisplay.innerText = highScore;
+        let isGameOver = false;
+        let gameSpeed = 5;
+
+        // Oyuncu (Neon Küp)
+        const player = {
+            width: 40,
+            height: 40,
+            lane: 1, // 0: Sol, 1: Orta, 2: Sağ
+            y: canvas.height - 100,
+
+            draw() {
+                const laneWidth = canvas.width / 3;
+                const x = (this.lane * laneWidth) + (laneWidth / 2) - (this.width / 2);
+
+                ctx.fillStyle = '#00f3ff';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#00f3ff';
+                ctx.fillRect(x, this.y, this.width, this.height);
+                ctx.shadowBlur = 0; // Reset
+            }
+        };
+
+        // Engeller (Kırmızı Bloklar)
+        const obstacles = [];
+
+        function handleObstacles() {
+            if (frames % 60 === 0) { // Her saniye yeni engel
+                const laneWidth = canvas.width / 3;
+                const randomLane = Math.floor(Math.random() * 3);
+                obstacles.push({
+                    lane: randomLane,
+                    x: (randomLane * laneWidth) + (laneWidth / 2) - 20,
+                    y: -50,
+                    width: 40,
+                    height: 40
+                });
+            }
+
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.y += gameSpeed;
+
+                ctx.fillStyle = '#ff2a2a';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff2a2a';
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.shadowBlur = 0;
+
+                // Çarpışma Kontrolü
+                const laneWidth = canvas.width / 3;
+                const playerX = (player.lane * laneWidth) + (laneWidth / 2) - (player.width / 2);
+
+                if (playerX < obs.x + obs.width &&
+                    playerX + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y) {
+                    gameOver();
+                }
+
+                // Ekranda çıkan engeli sil ve skor ekle
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreDisplay.innerText = score;
+                    i--;
+
+                    // Oyunu yavaş yavaş hızlandır
+                    if (score % 50 === 0) gameSpeed += 0.5;
+                }
+            }
+        }
+
+        // Kontroller (Hem Fare Tıklaması Hem Dokunmatik)
+        window.addEventListener('pointerdown', (e) => {
+            if (isGameOver) return;
+            const clickX = e.clientX;
+            const canvasRect = canvas.getBoundingClientRect();
+            // Tıklanan yerin canvas içindeki x koordinatını bul
+            const relativeX = clickX - canvasRect.left;
+
+            if (relativeX < canvas.width / 3) player.lane = 0;
+            else if (relativeX < (canvas.width / 3) * 2) player.lane = 1;
+            else player.lane = 2;
+        });
+
+        function gameOver() {
+            isGameOver = true;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('neonKacisHighScore', highScore);
+                highScoreDisplay.innerText = highScore;
+            }
+            finalScore.innerText = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function resetGame() {
+            obstacles.length = 0;
+            score = 0;
+            gameSpeed = 5;
+            frames = 0;
+            player.lane = 1;
+            scoreDisplay.innerText = score;
+            isGameOver = false;
+            gameOverScreen.style.display = 'none';
+            animate();
+        }
+
+        // Ana Oyun Döngüsü
+        function animate() {
+            if (isGameOver) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Şerit çizgileri çiz
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 3, 0); ctx.lineTo(canvas.width / 3, canvas.height);
+            ctx.moveTo((canvas.width / 3) * 2, 0); ctx.lineTo((canvas.width / 3) * 2, canvas.height);
+            ctx.stroke();
+
+            player.draw();
+            handleObstacles();
+
+            frames++;
+            requestAnimationFrame(animate);
+        }
+
+        // Oyunu Başlat
+        animate();
+    </script>
+</body>
+
+</html>

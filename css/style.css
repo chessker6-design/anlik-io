@@ -2,6 +2,7 @@
     --bg-primary: #121212;
     --bg-secondary: #1e1e1e;
     --bg-hover: #2a2a2a;
+    --accent: #6366f1;
     --text-primary: #ffffff;
     --text-secondary: #aaaaaa;
     --border: rgba(255, 255, 255, 0.08);
@@ -9,7 +10,7 @@
     --transition: 0.2s ease-in-out;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
     background-color: var(--bg-primary);
@@ -40,7 +41,8 @@ body {
     color: var(--text-secondary); text-decoration: none; font-weight: 500; font-size: 0.9rem;
     transition: var(--transition);
 }
-.top-menu a:hover, .top-menu a.active { color: var(--text-primary); }
+.top-menu a:hover { color: var(--text-primary); }
+.top-menu a.active { color: var(--accent); }
 
 .search-container { position: relative; }
 .search-container input {
@@ -55,7 +57,7 @@ body {
 }
 .search-container input::placeholder { color: var(--text-secondary); }
 .search-container input:focus {
-    border-color: #444;
+    border-color: var(--accent);
     background: #222;
     width: 260px;
 }
@@ -78,7 +80,7 @@ body {
     background: rgba(255, 255, 255, 0.1); color: var(--text-primary); 
 }
 .category-chip.active {
-    background: rgba(255, 255, 255, 0.15); color: var(--text-primary); border-color: rgba(255,255,255,0.1);
+    background: var(--accent); color: #ffffff; border-color: var(--accent);
 }
 
 .slider-wrapper { position: relative; display: flex; align-items: center; }
@@ -119,7 +121,7 @@ body {
 
 .big-game-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent);
 }
 .big-game-card:hover img { transform: scale(1.03); }
 
