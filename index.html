@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Anlık oyna, anlık eğlen! anlık.io" />
+    <title>anlık.io | Hemen Oyna</title>
+    <!-- Modern Google Fontları: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <!-- Üst Menü -->
+    <nav class="navbar">
+        <div class="container nav-content">
+            <a href="index.html" class="logo">anlık.io</a>
+            <ul class="top-menu">
+                <li><a href="#" class="active">Ana Sayfa</a></li>
+                <li><a href="#populer">Popüler</a></li>
+                <li><a href="#">Yeni Eklentiler</a></li>
+            </ul>
+            <div class="search-container">
+                <input id="searchInput" type="text" placeholder="Oyun ara..." autocomplete="off" />
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <!-- Kategoriler Çipleri (Zarif Butonlar) -->
+        <section id="kategoriler" class="slider-section container">
+            <div class="slider-wrapper">
+                <button class="slider-btn left-btn" id="slideLeft">&lt;</button>
+                <div class="category-chip-wrapper" id="categorySlider">
+                    <button class="category-chip active" data-filter="all">Tümü</button>
+                    <button class="category-chip" data-filter="aksiyon">Aksiyon</button>
+                    <button class="category-chip" data-filter="yarış">Yarış</button>
+                    <button class="category-chip" data-filter="zeka">Zeka</button>
+                    <button class="category-chip" data-filter="macera">Macera</button>
+                    <button class="category-chip" data-filter="spor">Spor</button>
+                    <button class="category-chip" data-filter="rpg">RPG</button>
+                    <button class="category-chip" data-filter="arcade">Arcade</button>
+                    <button class="category-chip" data-filter="strateji">Strateji</button>
+                </div>
+                <button class="slider-btn right-btn" id="slideRight">&gt;</button>
+            </div>
+        </section>
+
+        <!-- Oyunlar Grid (Büyük Kartlar) -->
+        <section id="populer" class="games-section container">
+            <h2 class="section-title">Oyunlar</h2>
+            
+            <div id="gamesGrid" class="huge-grid">
+                <!-- Javascript oyunları buraya büyük kare kartlar olarak basacak -->
+            </div>
+
+            <div id="loader" class="loader">
+                <div class="spinner"></div>
+                <p>Oyunlar yükleniyor...</p>
+            </div>
+
+            <div id="emptyState" class="empty-state hidden">
+                <div class="empty-icon">😢</div>
+                <h3>Oyun Bulunamadı</h3>
+                <p>Aradığın kriterlere uygun oyun bulamadık. Lütfen farklı bir arama yap.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container footer-content">
+            <div class="footer-logo">anlık.io</div>
+            <p>anlık.io - Hızlı tarayıcı oyun platformu.</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
