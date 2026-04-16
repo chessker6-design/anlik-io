@@ -4,97 +4,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neon Kaçış</title>
+    <title>Neon Kaçış DX</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: #0f0f13;
-            /* Sitenin temasına uygun dark arka plan */
+            background-color: #050508;
             color: white;
             font-family: 'Inter', sans-serif;
             overflow: hidden;
-            /* Scroll barlar çıkmasın */
             touch-action: none;
-            /* Mobilde dokunmatik kaydırmayı iptal et */
         }
 
         canvas {
             display: block;
             margin: 0 auto;
-            background: #1a1a2e;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            background: #121212;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 1);
         }
 
+        /* UI Overlays */
         #ui {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             pointer-events: none;
-            /* Tıklamalar UI içinden canvasa geçsin */
             width: 100%;
+            z-index: 10;
+        }
+
+        .score-board {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
         .score-text {
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 0 0 10px #00f3ff;
+            font-size: 36px;
+            font-weight: 900;
+            text-shadow: 0 0 20px #00f3ff;
             color: #00f3ff;
+            transition: transform 0.1s;
         }
 
-        .high-score-text {
-            font-size: 14px;
-            color: #888;
-            margin-top: 5px;
+        #currentMultiplierUI {
+            font-size: 24px;
+            font-weight: 900;
+            color: #ffd700;
+            text-shadow: 0 0 15px #ffaa00;
+            background: rgba(255, 215, 0, 0.2);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid #ffd700;
         }
 
-        #gameOverScreen {
-            display: none;
+        .high-score-text { font-size: 14px; color: #888; margin-top: 5px; }
+
+        /* Lives */
+        #livesDisplay {
+            font-size: 24px;
+            margin-top: 10px;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px #ff2a2a;
+        }
+
+        /* Massive Center Multiplier (Dopamine hit) */
+        #multiplierCenter {
             position: absolute;
-            top: 50%;
+            top: 40%;
             left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(15, 15, 19, 0.95);
-            padding: 30px;
-            border-radius: 15px;
-            border: 1px solid #ff2a2a;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(255, 42, 42, 0.4);
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 80px;
+            font-weight: 900;
+            color: #ff00ff;
+            text-shadow: 0 0 40px #ff00ff, 0 0 20px white;
+            pointer-events: none;
+            z-index: 15;
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s;
         }
 
-        h2 {
-            color: #ff2a2a;
-            margin-top: 0;
+        #multiplierCenter.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            animation: pulse-mult 0.4s infinite alternate;
         }
+
+        @keyframes pulse-mult {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            100% { transform: translate(-50%, -50%) scale(1.15) rotate(2deg); }
+        }
+
+        #screenFlash {
+            position: absolute; inset: 0; 
+            box-shadow: inset 40px 0 50px -20px rgba(255, 215, 0, 0.4), inset -40px 0 50px -20px rgba(255, 215, 0, 0.4);
+            opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.4s ease-out;
+        }
+
+        /* Game Over Screen */
+        #gameOverScreen {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(10, 10, 12, 0.95); padding: 40px; border-radius: 15px; border: 1px solid #ff2a2a;
+            text-align: center; box-shadow: 0 0 50px rgba(255, 42, 42, 0.5); z-index: 20;
+        }
+
+        h2 { color: #ff2a2a; margin-top: 0; font-size: 36px; text-shadow: 0 0 15px #ff2a2a; }
 
         button {
-            background: #00f3ff;
-            color: #0f0f13;
-            border: none;
-            padding: 10px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 15px;
-            text-transform: uppercase;
+            background: #00f3ff; color: #0f0f13; border: none; padding: 15px 30px; font-size: 20px;
+            font-weight: 900; border-radius: 8px; cursor: pointer; margin-top: 20px; text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4); transition: 0.2s;
         }
+        button:hover { transform: scale(1.08); background: white; box-shadow: 0 0 30px rgba(255, 255, 255, 0.8); }
+
+        /* Screen Shake */
+        @keyframes shake {
+            0% { transform: translate(2px, 2px) rotate(0deg); }
+            10% { transform: translate(-2px, -4px) rotate(-1deg); }
+            20% { transform: translate(-4px, 0px) rotate(1deg); }
+            30% { transform: translate(4px, 4px) rotate(0deg); }
+            40% { transform: translate(2px, -2px) rotate(1deg); }
+            50% { transform: translate(-2px, 4px) rotate(-1deg); }
+            60% { transform: translate(-4px, 2px) rotate(0deg); }
+            70% { transform: translate(4px, 2px) rotate(-1deg); }
+            80% { transform: translate(-2px, -2px) rotate(1deg); }
+            90% { transform: translate(2px, 4px) rotate(0deg); }
+            100% { transform: translate(2px, -4px) rotate(-1deg); }
+        }
+        .shake-screen { animation: shake 0.4s; }
     </style>
 </head>
 
 <body>
 
+    <div id="screenFlash"></div>
+
     <div id="ui">
-        <div class="score-text" id="scoreDisplay">0</div>
+        <div class="score-board">
+            <div class="score-text" id="scoreDisplay">0</div>
+            <div id="currentMultiplierUI">1X</div>
+        </div>
         <div class="high-score-text">En Yüksek: <span id="highScoreDisplay">0</span></div>
+        <div id="livesDisplay">❤️❤️❤️</div>
     </div>
 
+    <div id="multiplierCenter">2X</div>
+
     <div id="gameOverScreen">
-        <h2>ÇARPIŞMA!</h2>
-        <p>Skorun: <span id="finalScore">0</span></p>
-        <button onclick="resetGame()">Tekrar Oyna</button>
+        <h2>SİSTEM ÇÖKTÜ</h2>
+        <p style="font-size: 24px; color: #ddd;">Final Skor: <strong id="finalScore" style="color: #00f3ff;">0</strong></p>
+        <button onclick="resetGame()">Yeniden Başlat</button>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -106,98 +169,352 @@
         const highScoreDisplay = document.getElementById('highScoreDisplay');
         const gameOverScreen = document.getElementById('gameOverScreen');
         const finalScore = document.getElementById('finalScore');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const multiplierCenter = document.getElementById('multiplierCenter');
+        const currentMultiplierUI = document.getElementById('currentMultiplierUI');
+        const screenFlash = document.getElementById('screenFlash');
 
-        // Ekran boyutunu ayarla (Mobilde tam ekran, PC'de dikey telefon ekranı gibi)
+        // Ses Sistemi (Web Audio API)
+        let audioCtx;
+        let audioInitialized = false;
+        let scoreNoteIndex = 0;
+
+        function initAudio() {
+            if(audioInitialized) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            audioInitialized = true;
+        }
+
+        function playSound(type) {
+            if (!audioInitialized || audioCtx.state === 'suspended') return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            const t = audioCtx.currentTime;
+            
+            if (type === 'score') {
+                const pentatonic = [261.6, 293.7, 329.6, 392.0, 440.0, 523.3, 587.3, 659.3];
+                // Komboya göre perdesi artan dinamik melodi (Blok kayboldukça çalar!)
+                const noteFreq = pentatonic[scoreNoteIndex % pentatonic.length] * (1 + (multiplier * 0.05));
+                scoreNoteIndex++;
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(noteFreq, t);
+                gainNode.gain.setValueAtTime(scoreNoteIndex % 4 === 0 ? 0.2 : 0.1, t); // Nota vurgusu
+                gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                osc.start(t); osc.stop(t + 0.15);
+            } else if (type === 'hurt') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, t);
+                osc.frequency.exponentialRampToValueAtTime(80, t + 0.2);
+                gainNode.gain.setValueAtTime(0.2, t);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                osc.start(t); osc.stop(t + 0.2);
+            } else if (type === 'crash') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+                gainNode.gain.setValueAtTime(0.4, t);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+                osc.start(t); osc.stop(t + 0.5);
+            } else if (type === 'levelup') {
+                const mult = arguments[1] || 2;
+                const baseFreq = 200 + (mult * 100); 
+                
+                osc.type = mult >= 3 ? 'sawtooth' : 'sine'; // İlerleyen kombolarda daha yırtıcı ses
+                osc.frequency.setValueAtTime(baseFreq, t);
+                osc.frequency.linearRampToValueAtTime(baseFreq * 3, t + 0.3); 
+                gainNode.gain.setValueAtTime(0.25, t);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+                
+                const osc2 = audioCtx.createOscillator();
+                osc2.type = mult >= 4 ? 'square' : 'triangle';
+                osc2.frequency.setValueAtTime(baseFreq * 1.5, t); 
+                osc2.frequency.linearRampToValueAtTime(baseFreq * 4.5, t + 0.3);
+                osc2.connect(gainNode);
+                osc2.start(t); osc2.stop(t + 0.5);
+
+                // Yüksek kombolarda devasa bass düşüşü eklentisi efsane hissettirir
+                if(mult >= 3) {
+                    const bass = audioCtx.createOscillator();
+                    bass.type = 'square';
+                    bass.frequency.setValueAtTime(150, t);
+                    bass.frequency.exponentialRampToValueAtTime(20, t + 0.4);
+                    bass.connect(gainNode);
+                    bass.start(t); bass.stop(t + 0.4);
+                }
+
+                osc.start(t); osc.stop(t + 0.5);
+            }
+        }
+
+        // Dinamik Müzik Motoru (Hızlanan BGM)
+        const notes = [220, 261, 329, 261, 220, 196]; 
+        let noteIndex = 0;
+        let lastNoteTime = 0;
+
+        function updateMusic() {
+            if(!audioInitialized || isGameOver || audioCtx.state === 'suspended') return;
+            
+            // Oyun hızlandıkça müzik frekansı (süresi) kısalır!
+            const currentSpeedLimit = Math.max(80, 280 - (gameSpeed - 6) * 15);
+            
+            // Date.now() kullanıyoruz ki requestAnimationFrame içinde pürüzsüz çalışsın
+            const now = Date.now();
+            if (now - lastNoteTime > currentSpeedLimit) {
+                lastNoteTime = now;
+                
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = notes[noteIndex % notes.length] / 2;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                const t = audioCtx.currentTime;
+                gain.gain.setValueAtTime(0.05, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15); // Kısa kesik bass
+                
+                osc.start(t); osc.stop(t + 0.15);
+                noteIndex++;
+            }
+        }
+
+        // Ekran boyutunu ayarla
         function resizeCanvas() {
             canvas.width = window.innerWidth > 500 ? 400 : window.innerWidth;
             canvas.height = window.innerHeight;
+            player.y = canvas.height - 130;
         }
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        
+        // Dinamik Arka Plan Yıldızları (Hızlanan)
+        const stars = [];
+        for(let i=0; i<40; i++) {
+            stars.push({ x: Math.random(), y: Math.random(), baseSpeed: Math.random() * 2 + 1 });
+        }
 
         // Oyun Değişkenleri
-        let frames = 0;
         let score = 0;
         let highScore = localStorage.getItem('neonKacisHighScore') || 0;
         highScoreDisplay.innerText = highScore;
+        
+        let lives = 3;
+        let isInvulnerable = false;
         let isGameOver = false;
-        let gameSpeed = 5;
+        
+        let gameSpeed = 6;
+        let targetGameSpeed = 6;
+        let slowTimer = 0;
+        let multiplier = 1;
+        let nextMultiplierThreshold = 200;
 
-        // Oyuncu (Neon Küp)
+        let spawnDistance = 0;
+        let distanceToNextSpawn = 300; 
+
+        // Parçacık Efektleri
+        const particles = [];
+        function createParticles(x, y, color, count) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 16,
+                    vy: (Math.random() - 0.5) * 16,
+                    life: 1, color: color,
+                    size: Math.random() * 8 + 3
+                });
+            }
+        }
+
+        function drawEntities() {
+            // Arka Plan Yıldızları (Hızlanan)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            for(let star of stars) {
+                // gameSpeed'e göre yıldızların uzunluğu ve düşüş hızı artar
+                let speed = star.baseSpeed + (gameSpeed * 0.5);
+                star.y += speed / canvas.height;
+                if(star.y > 1) { star.y = 0; star.x = Math.random(); }
+                
+                ctx.fillRect(star.x * canvas.width, star.y * canvas.height, 2, speed * 1.5);
+            }
+
+            // Parçacıklar
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life > 0 ? p.life : 0;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                ctx.globalAlpha = 1;
+                if(p.life <= 0) { particles.splice(i, 1); i--; }
+            }
+        }
+
+        // Oyuncu 
         const player = {
-            width: 40,
-            height: 40,
-            lane: 1, // 0: Sol, 1: Orta, 2: Sağ
-            y: canvas.height - 100,
+            width: 44,
+            height: 44,
+            lane: 1, 
+            y: 0,
+            visible: true,
 
             draw() {
+                if(!this.visible) return; // Yanıp sönme (Dokunulmazlık efekti)
+                
                 const laneWidth = canvas.width / 3;
                 const x = (this.lane * laneWidth) + (laneWidth / 2) - (this.width / 2);
 
-                ctx.fillStyle = '#00f3ff';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#00f3ff';
+                ctx.fillStyle = isInvulnerable ? '#ff00ff' : '#00f3ff';
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = isInvulnerable ? '#ff00ff' : '#00f3ff';
                 ctx.fillRect(x, this.y, this.width, this.height);
-                ctx.shadowBlur = 0; // Reset
+                ctx.fillStyle = 'white';
+                ctx.fillRect(x+12, this.y+12, this.width-24, this.height-24);
+                ctx.shadowBlur = 0; 
             }
         };
 
-        // Engeller (Kırmızı Bloklar)
+        resizeCanvas();
+
+        function triggerMultiplierLevelUp(newMult) {
+            playSound('levelup', newMult);
+            multiplierCenter.innerText = newMult + 'X';
+            multiplierCenter.className = "show";
+            currentMultiplierUI.innerText = newMult + 'X';
+            
+            // Ekran Beyaz Parlama
+            screenFlash.style.opacity = '0.9';
+            setTimeout(() => { screenFlash.style.opacity = '0'; }, 150);
+
+            // Kocaman yazıyı bir süre sonra gizle
+            setTimeout(() => {
+                multiplierCenter.className = "";
+            }, 1500);
+
+            // Level up partikül atışı
+            const laneWidth = canvas.width / 3;
+            const px = (player.lane * laneWidth) + (laneWidth / 2);
+            createParticles(px, player.y, '#ffd700', 40);
+            createParticles(px, player.y, '#ff00ff', 40);
+        }
+
         const obstacles = [];
 
         function handleObstacles() {
-            if (frames % 60 === 0) { // Her saniye yeni engel
-                const laneWidth = canvas.width / 3;
+            spawnDistance += gameSpeed; // Hıza duyarlı piksel sayacı
+            if (spawnDistance >= distanceToNextSpawn) { 
+                spawnDistance = 0;
+                // Mantık hatası çözümü: Bloklar arası mesafe hiçbir zaman 200px'in altına inmez. Duvar olamaz!
+                distanceToNextSpawn = Math.max(200, 350 - Math.floor(score / 15));
+
                 const randomLane = Math.floor(Math.random() * 3);
-                obstacles.push({
-                    lane: randomLane,
-                    x: (randomLane * laneWidth) + (laneWidth / 2) - 20,
-                    y: -50,
-                    width: 40,
-                    height: 40
-                });
+                obstacles.push({ lane: randomLane, y: -60, width: 50, height: 50, scored: false });
+
+                // Çift Engel (Score bazlı zorluk)
+                if (score > 100 && Math.random() > 0.55) {
+                    let secondLane = Math.floor(Math.random() * 3);
+                    if (secondLane !== randomLane) {
+                        obstacles.push({ lane: secondLane, y: -60, width: 50, height: 50, scored: false });
+                    }
+                }
             }
+
+            const laneWidth = canvas.width / 3;
+            const playerX = (player.lane * laneWidth) + (laneWidth / 2) - (player.width / 2);
 
             for (let i = 0; i < obstacles.length; i++) {
                 let obs = obstacles[i];
                 obs.y += gameSpeed;
 
+                let obsX = (obs.lane * laneWidth) + (laneWidth / 2) - (obs.width / 2);
+
                 ctx.fillStyle = '#ff2a2a';
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = 20;
                 ctx.shadowColor = '#ff2a2a';
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.fillRect(obsX, obs.y, obs.width, obs.height);
                 ctx.shadowBlur = 0;
 
                 // Çarpışma Kontrolü
-                const laneWidth = canvas.width / 3;
-                const playerX = (player.lane * laneWidth) + (laneWidth / 2) - (player.width / 2);
-
-                if (playerX < obs.x + obs.width &&
-                    playerX + player.width > obs.x &&
+                if (!isInvulnerable && !isGameOver &&
+                    playerX < obsX + obs.width &&
+                    playerX + player.width > obsX &&
                     player.y < obs.y + obs.height &&
                     player.y + player.height > obs.y) {
-                    gameOver();
+                    
+                    lives--;
+                    livesDisplay.innerText = '❤️'.repeat(lives);
+                    createParticles(playerX + 22, player.y + 22, '#ff2a2a', 50);
+
+                    if(lives <= 0) {
+                        gameOver();
+                    } else {
+                        // Yaralanma & Dokunulmazlık ve Ceza
+                        playSound('hurt');
+                        
+                        // Ceza: Çarptığında multiplier sıfırlanır ve hedef bir tık uzağa atılır
+                        multiplier = 1;
+                        currentMultiplierUI.innerText = '1X';
+                        nextMultiplierThreshold = score + 200;
+                        slowTimer = 180; // Oyunu 3 Saniye Yavaşlat (60fps * 3 = 180 frame)
+                        
+                        canvas.classList.add('shake-screen');
+                        setTimeout(() => canvas.classList.remove('shake-screen'), 400);
+                        
+                        isInvulnerable = true;
+                        let blinkInt = setInterval(() => { player.visible = !player.visible; }, 150);
+                        
+                        // Çarptığı objeyi siliyoruz ki içinden geçerken takılmasın
+                        obstacles.splice(i, 1);
+                        i--;
+
+                        setTimeout(() => {
+                            isInvulnerable = false;
+                            player.visible = true;
+                            clearInterval(blinkInt);
+                        }, 2000);
+                        continue;
+                    }
                 }
 
-                // Ekranda çıkan engeli sil ve skor ekle
-                if (obs.y > canvas.height) {
-                    obstacles.splice(i, 1);
-                    score += 10;
+                // Engel başarıyla geçildi
+                if (obs.y > player.y + player.height && !obs.scored && !isGameOver) {
+                    obs.scored = true;
+                    // Skor x Multiplier
+                    score += 10 * multiplier;
                     scoreDisplay.innerText = score;
-                    i--;
+                    
+                    playSound('score');
+                    scoreDisplay.style.transform = 'scale(1.3)';
+                    setTimeout(()=> scoreDisplay.style.transform = 'scale(1)', 100);
 
-                    // Oyunu yavaş yavaş hızlandır
-                    if (score % 50 === 0) gameSpeed += 0.5;
+                    createParticles(obsX + 25, obs.y, '#00f3ff', 8);
+
+                    // ZORLAŞAN MULTIPLIER/COMBO SİSTEMİ
+                    if (score >= nextMultiplierThreshold) {
+                        multiplier++;
+                        nextMultiplierThreshold = score + (multiplier * 250); // Katlandıkça zor ulaşılır
+                        triggerMultiplierLevelUp(multiplier);
+                    }
+
+                    // Hızlanma Sistemi (Daha yavaş ve kademeli)
+                    if (score % 100 === 0) targetGameSpeed += 0.3;
+                }
+
+                // Çıkan Engeli Sil
+                if (obs.y > canvas.height + 100) {
+                    obstacles.splice(i, 1);
+                    i--;
                 }
             }
         }
 
-        // Kontroller (Hem Fare Tıklaması Hem Dokunmatik)
         window.addEventListener('pointerdown', (e) => {
+            initAudio(); 
             if (isGameOver) return;
             const clickX = e.clientX;
             const canvasRect = canvas.getBoundingClientRect();
-            // Tıklanan yerin canvas içindeki x koordinatını bul
             const relativeX = clickX - canvasRect.left;
 
             if (relativeX < canvas.width / 3) player.lane = 0;
@@ -205,50 +522,89 @@
             else player.lane = 2;
         });
 
+        window.addEventListener('keydown', (e) => {
+            initAudio();
+            if (isGameOver) return;
+            if (e.key === "ArrowLeft" || e.key === "a") { if(player.lane > 0) player.lane--; }
+            else if (e.key === "ArrowRight" || e.key === "d") { if(player.lane < 2) player.lane++; }
+        });
+
         function gameOver() {
+            if(isGameOver) return;
             isGameOver = true;
+            playSound('crash');
+            
+            canvas.classList.add('shake-screen');
+            setTimeout(() => canvas.classList.remove('shake-screen'), 400);
+
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem('neonKacisHighScore', highScore);
                 highScoreDisplay.innerText = highScore;
             }
             finalScore.innerText = score;
-            gameOverScreen.style.display = 'block';
+            
+            setTimeout(() => {
+                gameOverScreen.style.display = 'block';
+            }, 600);
         }
 
         function resetGame() {
+            initAudio();
             obstacles.length = 0;
+            particles.length = 0;
             score = 0;
-            gameSpeed = 5;
-            frames = 0;
+            lives = 3;
+            gameSpeed = 6;
+            targetGameSpeed = 6;
+            slowTimer = 0;
+            multiplier = 1;
+            nextMultiplierThreshold = 200;
+            spawnDistance = 0;
+            distanceToNextSpawn = 300;
             player.lane = 1;
+            isInvulnerable = false;
+            player.visible = true;
+            
             scoreDisplay.innerText = score;
+            currentMultiplierUI.innerText = '1X';
+            livesDisplay.innerText = '❤️❤️❤️';
+            
             isGameOver = false;
             gameOverScreen.style.display = 'none';
-            animate();
         }
 
-        // Ana Oyun Döngüsü
         function animate() {
-            if (isGameOver) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Şerit çizgileri çiz
-            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            // Yavaşlama Kontrolü
+            if (slowTimer > 0) {
+                slowTimer--;
+                gameSpeed = 4;
+            } else {
+                gameSpeed = targetGameSpeed;
+            }
+
+            // Şeritler
+            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(canvas.width / 3, 0); ctx.lineTo(canvas.width / 3, canvas.height);
             ctx.moveTo((canvas.width / 3) * 2, 0); ctx.lineTo((canvas.width / 3) * 2, canvas.height);
             ctx.stroke();
 
-            player.draw();
-            handleObstacles();
+            drawEntities();
 
-            frames++;
+            if (!isGameOver) {
+                updateMusic(); // Müziği hıza göre anlık çal
+                player.draw();
+                handleObstacles();
+            }
+
             requestAnimationFrame(animate);
         }
 
-        // Oyunu Başlat
+        // Başlat
         animate();
     </script>
 </body>
