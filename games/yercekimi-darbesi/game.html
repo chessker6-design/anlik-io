@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yerçekimi Darbesi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #0a0a12; font-family: 'Outfit', sans-serif; touch-action: none; user-select: none; }
+        canvas { display: block; }
+
+        #ui {
+            position: fixed; top: 0; left: 0; width: 100%; padding: 20px 25px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            pointer-events: none; z-index: 10;
+        }
+        .glass-panel {
+            background: rgba(255,255,255,0.06); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 12px 20px;
+        }
+        .score-val { font-size: 32px; font-weight: 900; color: #e0e0ff; line-height: 1; }
+        .score-label { font-size: 11px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 2px; }
+        .best-val { font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.5); }
+
+        #gameOver {
+            display: none; position: fixed; inset: 0; z-index: 100;
+            background: rgba(5,5,15,0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            flex-direction: column; align-items: center; justify-content: center; gap: 15px;
+        }
+        #gameOver.show { display: flex; }
+        #gameOver h1 { font-size: 42px; font-weight: 900; background: linear-gradient(135deg, #a78bfa, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        #gameOver .final { font-size: 64px; font-weight: 900; color: #fff; }
+        #gameOver .sub { font-size: 14px; color: rgba(255,255,255,0.4); }
+        .btn-restart {
+            margin-top: 10px; padding: 16px 50px; font-size: 18px; font-weight: 700; font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #7c3aed, #db2777); color: #fff; border: none; border-radius: 50px;
+            cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 30px rgba(124,58,237,0.4);
+        }
+        .btn-restart:active { transform: scale(0.95); }
+
+        #tapHint {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            font-size: 14px; color: rgba(255,255,255,0.25); pointer-events: none; z-index: 10;
+            animation: fadeHint 3s ease-out forwards;
+        }
+        @keyframes fadeHint { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="glass-panel">
+            <div class="score-label">Mesafe</div>
+            <div class="score-val" id="scoreVal">0</div>
+        </div>
+        <div class="glass-panel" style="text-align:right;">
+            <div class="score-label">En İyi</div>
+            <div class="best-val" id="bestVal">0</div>
+        </div>
+    </div>
+
+    <div id="tapHint">Yerçekimini değiştirmek için dokun</div>
+
+    <div id="gameOver">
+        <h1>YERÇEKİMİ ÇÖKTÜ</h1>
+        <div class="final" id="finalScore">0</div>
+        <div class="sub">metre ilerlendi</div>
+        <button class="btn-restart" onclick="restart()">Tekrar Dene</button>
+    </div>
+
+    <canvas id="c"></canvas>
+
+    <script>
+    const C = document.getElementById('c');
+    const $ = C.getContext('2d');
+    const scoreVal = document.getElementById('scoreVal');
+    const bestVal = document.getElementById('bestVal');
+    const goScreen = document.getElementById('gameOver');
+    const finalScoreEl = document.getElementById('finalScore');
+
+    let W, H;
+    function resize() { W = C.width = innerWidth; H = C.height = innerHeight; }
+    resize(); addEventListener('resize', resize);
+
+    // --- Audio ---
+    let ac;
+    function initAudio() { if(ac) return; ac = new (AudioContext || webkitAudioContext)(); }
+    function snd(type) {
+        if(!ac || ac.state==='suspended') return;
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.connect(g); g.connect(ac.destination); const t = ac.currentTime;
+        if(type==='flip') {
+            o.type='sine'; o.frequency.setValueAtTime(gravDir>0?300:600,t);
+            o.frequency.exponentialRampToValueAtTime(gravDir>0?600:300,t+0.12);
+            g.gain.setValueAtTime(0.15,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.12);
+            o.start(t); o.stop(t+0.12);
+        } else if(type==='die') {
+            o.type='sawtooth'; o.frequency.setValueAtTime(200,t); o.frequency.exponentialRampToValueAtTime(30,t+0.6);
+            g.gain.setValueAtTime(0.4,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.6);
+            o.start(t); o.stop(t+0.6);
+        } else if(type==='pass') {
+            o.type='triangle'; o.frequency.setValueAtTime(500+Math.random()*300,t);
+            g.gain.setValueAtTime(0.08,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+            o.start(t); o.stop(t+0.08);
+        }
+    }
+
+    // --- BGM Drone ---
+    let droneOsc, droneGain;
+    function startDrone() {
+        if(!ac) return;
+        droneOsc = ac.createOscillator(); droneGain = ac.createGain();
+        droneOsc.type = 'sine'; droneOsc.frequency.value = 55;
+        droneGain.gain.value = 0.03;
+        droneOsc.connect(droneGain); droneGain.connect(ac.destination);
+        droneOsc.start();
+    }
+    function stopDrone() { try { droneOsc?.stop(); } catch(e){} }
+
+    // --- State ---
+    let player, gravDir, obstacles, particles, trail, score, best, dead, speed, hue, time;
+
+    best = +localStorage.getItem('gravBest') || 0;
+    bestVal.textContent = best;
+
+    function init() {
+        player = { x: W*0.22, y: H/2, vy: 0, w: 22, h: 22, rotation: 0 };
+        gravDir = 1; obstacles = []; particles = []; trail = [];
+        score = 0; dead = false; speed = 5; hue = 260; time = 0;
+        scoreVal.textContent = '0';
+        goScreen.classList.remove('show');
+    }
+    init();
+
+    function flip() {
+        if(dead) return;
+        initAudio();
+        gravDir *= -1;
+        snd('flip');
+        // burst particles at player
+        for(let i=0;i<12;i++) {
+            particles.push({
+                x: player.x, y: player.y,
+                vx: (Math.random()-0.5)*6, vy: gravDir * -(Math.random()*8+2),
+                life: 1, color: `hsl(${hue},80%,70%)`, size: Math.random()*4+2
+            });
+        }
+    }
+
+    addEventListener('pointerdown', flip);
+    addEventListener('keydown', (e) => { if(e.code==='Space') flip(); });
+
+    function restart() {
+        init();
+        if(!droneOsc) startDrone();
+    }
+
+    // --- Spawn obstacles ---
+    let spawnTimer = 0;
+    function spawnObstacle() {
+        const gapH = Math.max(120, 200 - score*0.3);
+        const gapY = Math.random()*(H - gapH - 100) + 50;
+        obstacles.push({ x: W + 60, gapY, gapH, w: 35, passed: false });
+    }
+
+    function update(dt) {
+        if(dead) return;
+        time += dt;
+        hue = (260 + time*8) % 360;
+        speed = 5 + score*0.02;
+
+        // Player physics
+        player.vy += gravDir * 0.55;
+        player.vy *= 0.985;
+        player.y += player.vy;
+        player.rotation += gravDir * 0.08;
+
+        // Trail
+        trail.push({ x: player.x, y: player.y, life: 1 });
+
+        // Boundary death
+        if(player.y < -10 || player.y > H+10) die();
+
+        // Obstacles
+        spawnTimer += speed;
+        if(spawnTimer > 280) { spawnTimer = 0; spawnObstacle(); }
+
+        for(let i=obstacles.length-1; i>=0; i--) {
+            let ob = obstacles[i];
+            ob.x -= speed;
+
+            // Collision
+            if(player.x + player.w/2 > ob.x && player.x - player.w/2 < ob.x + ob.w) {
+                if(player.y - player.h/2 < ob.gapY || player.y + player.h/2 > ob.gapY + ob.gapH) {
+                    die();
+                }
+            }
+
+            // Passed
+            if(!ob.passed && ob.x + ob.w < player.x) {
+                ob.passed = true;
+                score++;
+                scoreVal.textContent = score;
+                snd('pass');
+            }
+
+            if(ob.x < -60) obstacles.splice(i,1);
+        }
+
+        // Particles
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.x += p.vx; p.y += p.vy; p.life -= 0.025;
+            if(p.life <= 0) particles.splice(i,1);
+        }
+        // Trail fade
+        for(let i=trail.length-1; i>=0; i--) {
+            trail[i].life -= 0.04;
+            if(trail[i].life <= 0) trail.splice(i,1);
+        }
+    }
+
+    function die() {
+        if(dead) return;
+        dead = true; snd('die');
+        for(let i=0;i<40;i++) {
+            particles.push({
+                x: player.x, y: player.y,
+                vx: (Math.random()-0.5)*16, vy: (Math.random()-0.5)*16,
+                life: 1, color: '#fff', size: Math.random()*6+2
+            });
+        }
+        if(score > best) { best = score; localStorage.setItem('gravBest', best); bestVal.textContent = best; }
+        finalScoreEl.textContent = score;
+        setTimeout(() => goScreen.classList.add('show'), 700);
+        stopDrone();
+    }
+
+    function draw() {
+        // Background gradient
+        let grad = $.createLinearGradient(0,0,W,H);
+        grad.addColorStop(0, `hsl(${hue},30%,6%)`);
+        grad.addColorStop(1, `hsl(${(hue+60)%360},30%,8%)`);
+        $.fillStyle = grad; $.fillRect(0,0,W,H);
+
+        // Subtle grid lines scrolling
+        $.strokeStyle = `hsla(${hue},40%,25%,0.08)`;
+        $.lineWidth = 1;
+        let offset = (time*speed*20) % 60;
+        for(let x = -offset; x < W+60; x += 60) {
+            $.beginPath(); $.moveTo(x,0); $.lineTo(x,H); $.stroke();
+        }
+        for(let y = 0; y < H; y += 60) {
+            $.beginPath(); $.moveTo(0,y); $.lineTo(W,y); $.stroke();
+        }
+
+        // Trail
+        for(let t of trail) {
+            $.globalAlpha = t.life * 0.4;
+            $.fillStyle = `hsl(${hue},70%,65%)`;
+            $.fillRect(t.x-3, t.y-3, 6, 6);
+        }
+        $.globalAlpha = 1;
+
+        // Obstacles
+        for(let ob of obstacles) {
+            let g1 = $.createLinearGradient(ob.x, 0, ob.x+ob.w, 0);
+            g1.addColorStop(0, `hsla(${(hue+120)%360},60%,50%,0.8)`);
+            g1.addColorStop(1, `hsla(${(hue+120)%360},60%,50%,0.3)`);
+            $.fillStyle = g1;
+            // Top pillar
+            $.fillRect(ob.x, 0, ob.w, ob.gapY);
+            // Bottom pillar
+            $.fillRect(ob.x, ob.gapY + ob.gapH, ob.w, H - (ob.gapY+ob.gapH));
+
+            // Glow edges
+            $.shadowColor = `hsl(${(hue+120)%360},80%,60%)`;
+            $.shadowBlur = 15;
+            $.fillStyle = `hsl(${(hue+120)%360},80%,70%)`;
+            $.fillRect(ob.x, ob.gapY-3, ob.w, 3);
+            $.fillRect(ob.x, ob.gapY+ob.gapH, ob.w, 3);
+            $.shadowBlur = 0;
+        }
+
+        // Player
+        if(!dead) {
+            $.save();
+            $.translate(player.x, player.y);
+            $.rotate(player.rotation);
+            $.shadowColor = `hsl(${hue},80%,70%)`;
+            $.shadowBlur = 25;
+            // Diamond shape
+            $.fillStyle = '#fff';
+            $.beginPath();
+            $.moveTo(0, -player.h/2);
+            $.lineTo(player.w/2, 0);
+            $.lineTo(0, player.h/2);
+            $.lineTo(-player.w/2, 0);
+            $.closePath();
+            $.fill();
+            // Inner glow
+            $.fillStyle = `hsl(${hue},80%,65%)`;
+            $.beginPath();
+            $.moveTo(0, -player.h/4);
+            $.lineTo(player.w/4, 0);
+            $.lineTo(0, player.h/4);
+            $.lineTo(-player.w/4, 0);
+            $.closePath();
+            $.fill();
+            $.shadowBlur = 0;
+            $.restore();
+        }
+
+        // Particles
+        for(let p of particles) {
+            $.globalAlpha = Math.max(0, p.life);
+            $.fillStyle = p.color;
+            $.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+        }
+        $.globalAlpha = 1;
+
+        // Gravity indicator arrows at edges
+        $.globalAlpha = 0.15;
+        $.fillStyle = '#fff';
+        let arrowY = gravDir > 0 ? H-20 : 20;
+        for(let x=30; x<W; x+=80) {
+            $.beginPath();
+            if(gravDir>0) { $.moveTo(x,arrowY); $.lineTo(x-6,arrowY-10); $.lineTo(x+6,arrowY-10); }
+            else { $.moveTo(x,arrowY); $.lineTo(x-6,arrowY+10); $.lineTo(x+6,arrowY+10); }
+            $.fill();
+        }
+        $.globalAlpha = 1;
+    }
+
+    let last = 0;
+    function loop(ts) {
+        let dt = Math.min((ts - last)/16.67, 3);
+        last = ts;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
