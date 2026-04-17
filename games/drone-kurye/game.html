@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Drone Kurye</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0a0510; font-family: 'Arial Black', sans-serif; color: white; touch-action: none; }
+        canvas { display: block; margin: 0 auto; background: linear-gradient(180deg, #120921 0%, #05020a 100%); }
+        #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; }
+        .score { font-size: 45px; color: #ff00ff; text-shadow: 0 0 15px #ff00ff; transition: 0.1s; }
+        .game-over { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(5,2,10,0.9); padding: 50px; border: 2px solid #00f3ff; border-radius: 15px; box-shadow: 0 0 40px rgba(0,243,255,0.4); }
+        button { background: #ff00ff; color: #fff; border: none; padding: 15px 30px; font-size: 20px; font-weight: bold; border-radius: 8px; margin-top: 20px; cursor: pointer; box-shadow: 0 0 15px #ff00ff; transition: 0.2s; }
+        @keyframes shake { 0% {transform:translate(4px,0);} 50% {transform:translate(-4px,0);} 100% {transform:translate(0,0);} }
+        .shake { animation: shake 0.2s; }
+    </style>
+</head>
+<body>
+    <div id="ui"><div class="score" id="scoreEl">0m</div></div>
+    <div class="game-over" id="goScreen">
+        <h1 style="color:#00f3ff; margin:0 0 10px 0; font-size:36px; text-shadow: 0 0 20px #00f3ff;">KARGO DÜŞTÜ</h1>
+        <p style="font-size: 20px;">Mesafe: <span id="finalScore" style="color:#ff00ff; font-weight:bold;">0</span> m</p>
+        <button onclick="resetGame()">Yeni Teslimat</button>
+    </div>
+    <canvas id="game"></canvas>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('scoreEl');
+        let width = canvas.width = window.innerWidth > 500 ? 400 : window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        
+        let actx;
+        function play(t) {
+            if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+            if(actx.state==='suspended') actx.resume();
+            let o = actx.createOscillator(), g = actx.createGain();
+            o.connect(g); g.connect(actx.destination);
+            if(t==='score') { o.type='sine'; o.frequency.setValueAtTime(400, actx.currentTime); o.frequency.exponentialRampToValueAtTime(800, actx.currentTime+0.1); g.gain.setValueAtTime(0.1, actx.currentTime); }
+            else if(t==='die') { o.type='sawtooth'; o.frequency.setValueAtTime(100, actx.currentTime); o.frequency.exponentialRampToValueAtTime(20, actx.currentTime+0.4); g.gain.setValueAtTime(0.4, actx.currentTime); }
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime+ (t==='die'?0.4:0.1));
+            o.start(); o.stop(actx.currentTime+ (t==='die'?0.4:0.1));
+        }
+
+        let player = { x: width/2, y: height - 120, s: 30 };
+        let obstacles = [], particles = [], stars = [];
+        let score = 0, isDead = false, speed = 7, frame = 0;
+        
+        for(let i=0; i<30; i++) stars.push({x:Math.random()*width, y:Math.random()*height, s:Math.random()*2+1});
+
+        function createP(x,y,c, n) {
+            for(let i=0;i<n;i++) particles.push({x,y, vx:(Math.random()-0.5)*12, vy:(Math.random()-0.5)*12, life:1, c});
+        }
+
+        function resetGame() {
+            obstacles = []; particles = []; score = 0; frame = 0; isDead = false; speed = 7;
+            player.x = width/2; scoreEl.innerText = '0m';
+            document.getElementById('goScreen').style.display = 'none';
+        }
+
+        // Controls
+        let touchX = width/2;
+        window.addEventListener('pointermove', (e) => { touchX = e.clientX > width ? width : e.clientX; });
+        window.addEventListener('pointerdown', () => { if(!actx) play('start'); });
+        
+        let keys = { ArrowLeft: false, ArrowRight: false };
+        window.addEventListener('keydown', (e) => { if(keys[e.key] !== undefined) {keys[e.key] = true; if(!actx) play('start');} });
+        window.addEventListener('keyup', (e) => { if(keys[e.key] !== undefined) keys[e.key] = false; });
+
+        function loop() {
+            requestAnimationFrame(loop);
+            if(isDead) return;
+            ctx.clearRect(0,0,width,height);
+            
+            // BG Stars
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            for(let s of stars) {
+                s.y += speed*0.5; if(s.y > height) {s.y=0; s.x=Math.random()*width;}
+                ctx.fillRect(s.x, s.y, s.s, s.s*4);
+            }
+
+            // Player move
+            if(keys.ArrowLeft) touchX -= 8;
+            if(keys.ArrowRight) touchX += 8;
+            player.x += (touchX - player.x) * 0.2;
+            player.x = Math.max(player.s/2, Math.min(width - player.s/2, player.x)); // confine
+
+            // Draw player
+            ctx.fillStyle = '#ff00ff'; ctx.shadowBlur = 20; ctx.shadowColor = '#ff00ff';
+            ctx.beginPath(); ctx.moveTo(player.x, player.y - player.s); ctx.lineTo(player.x - player.s, player.y + player.s); ctx.lineTo(player.x + player.s, player.y + player.s); ctx.fill();
+            ctx.shadowBlur = 0;
+            createP(player.x, player.y+player.s, '#00f3ff', 1); // jet engine
+
+            // Obstacles
+            if(frame % Math.max(15, 40 - Math.floor(score/100)) === 0) {
+                let w = Math.random()*80 + 30;
+                obstacles.push({ x: Math.random()*(width-w), y: -100, w: w, h: 20 });
+            }
+
+            for(let i=0; i<obstacles.length; i++) {
+                let o = obstacles[i];
+                o.y += speed;
+                
+                ctx.fillStyle = '#00f3ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#00f3ff';
+                ctx.fillRect(o.x, o.y, o.w, o.h); ctx.shadowBlur = 0;
+
+                // Collision
+                let px = player.x, py = player.y; // approximate triangle bounding box as circle
+                let closestX = Math.max(o.x, Math.min(px, o.x + o.w));
+                let closestY = Math.max(o.y, Math.min(py, o.y + o.h));
+                let dx = px - closestX, dy = py - closestY;
+                if((dx*dx + dy*dy) < (player.s*0.8)*(player.s*0.8)) {
+                    createP(px, py, '#ff00ff', 60); play('die'); isDead = true;
+                    document.getElementById('goScreen').style.display='block';
+                    document.getElementById('finalScore').innerText=score;
+                    canvas.classList.add('shake'); setTimeout(()=>canvas.classList.remove('shake'),300);
+                }
+
+                if(o.y > height) { obstacles.splice(i,1); i--; }
+            }
+
+            // Particles
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=0.05;
+                ctx.fillStyle=p.c; ctx.globalAlpha=Math.max(0,p.life);
+                ctx.fillRect(p.x,p.y, 4, 4); ctx.globalAlpha=1;
+                if(p.life<=0){particles.splice(i,1);i--;}
+            }
+            
+            frame++;
+            if(frame % 10 === 0) { score += 1; scoreEl.innerText = score+'m'; if(score%100===0) { speed+=0.5; play('score'); scoreEl.style.transform='scale(1.5)'; setTimeout(()=>scoreEl.style.transform='scale(1)', 150); } }
+        }
+        loop();
+    </script>
+</body>
+</html>
