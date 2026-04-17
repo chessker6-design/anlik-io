@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yapay Zeka İsyanı</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Consolas', monospace; color: white; touch-action: none; cursor: none; }
+        canvas { display: block; margin: 0 auto; background: radial-gradient(circle at 50% 50%, #1a0000, #000); }
+        #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; z-index: 10; }
+        .score { font-size: 50px; color: #ff0000; text-shadow: 0 0 20px #ff0000; font-weight: bold; }
+        .game-over { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(20,0,0,0.9); padding: 40px; border: 2px solid #ff0000; border-radius: 10px; box-shadow: 0 0 50px #ff0000; z-index: 20; pointer-events: auto; }
+        button { background: #ff0000; color: #fff; border: none; padding: 15px 30px; font-size: 20px; font-weight: bold; margin-top: 20px; cursor: pointer; text-transform: uppercase; box-shadow: 0 0 15px #ff0000; }
+        @keyframes glitch { 0% {transform: translate(2px,2px);} 20% {transform: translate(-2px,-2px) skewX(20deg);} 40% {transform: translate(2px,-2px);} 60% {transform: translate(-2px,2px) skewX(-20deg);} 100% {transform: translate(0,0);} }
+        .glitch { animation: glitch 0.2s infinite; }
+    </style>
+</head>
+<body>
+    <div id="ui"><div class="score" id="scoreEl">0.0s</div></div>
+    <div class="game-over" id="goScreen">
+        <h1 style="color:#ff0000; margin:0 0 10px 0; font-size: 40px;" class="glitch">ASİMİLE EDİLDİN</h1>
+        <p>Hayatta Kalma: <span id="finalScore" style="color:#fff; font-weight:bold; font-size: 24px;">0</span> sn</p>
+        <button onclick="resetGame()">Sisteme Yeniden Sız</button>
+    </div>
+    <canvas id="game"></canvas>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('scoreEl');
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        
+        let actx;
+        function play(t) {
+            if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+            if(actx.state==='suspended') actx.resume();
+            let o = actx.createOscillator(), g = actx.createGain();
+            o.connect(g); g.connect(actx.destination);
+            if(t==='spawn') { o.type='square'; o.frequency.setValueAtTime(200, actx.currentTime); o.frequency.exponentialRampToValueAtTime(1000, actx.currentTime+0.1); g.gain.setValueAtTime(0.05, actx.currentTime); }
+            else if(t==='die') { o.type='sawtooth'; o.frequency.setValueAtTime(300, actx.currentTime); o.frequency.linearRampToValueAtTime(20, actx.currentTime+0.8); g.gain.setValueAtTime(0.6, actx.currentTime); }
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime+ (t==='die'?0.8:0.1));
+            o.start(); o.stop(actx.currentTime+ (t==='die'?0.8:0.1));
+        }
+
+        let player = { x: width/2, y: height/2, s: 15 };
+        let mouseX = width/2, mouseY = height/2;
+        let enemies = [], particles = [];
+        let score = 0, isDead = false, fps = 60, frame = 0, enemySpeed = 2;
+
+        function createP(x,y,c, n) {
+            for(let i=0;i<n;i++) particles.push({x,y, vx:(Math.random()-0.5)*15, vy:(Math.random()-0.5)*15, life:1, c});
+        }
+
+        function resetGame() {
+            enemies = []; particles = []; score = 0; frame = 0; enemySpeed = 2; isDead = false;
+            player.x = width/2; player.y = height/2;
+            document.getElementById('goScreen').style.display = 'none';
+            document.body.style.cursor = 'none';
+        }
+
+        window.addEventListener('pointermove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        window.addEventListener('pointerdown', () => { if(!actx) play('spawn'); });
+
+        function loop() {
+            requestAnimationFrame(loop);
+            if(isDead) return;
+            ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0,0,width,height);
+            
+            // Grid
+            ctx.strokeStyle='rgba(255,0,0,0.1)'; ctx.lineWidth=1;
+            ctx.beginPath();
+            for(let i=0;i<width;i+=40) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
+            for(let i=0;i<height;i+=40) { ctx.moveTo(0,i); ctx.lineTo(width,i); }
+            ctx.stroke();
+
+            // Player move (lerp)
+            player.x += (mouseX - player.x) * 0.3;
+            player.y += (mouseY - player.y) * 0.3;
+
+            // Draw player
+            ctx.fillStyle = '#00f3ff'; ctx.shadowBlur = 20; ctx.shadowColor = '#00f3ff';
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.s, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            createP(player.x, player.y, '#00f3ff', 1);
+
+            // Spawn Enemies
+            if(frame % Math.max(20, 90 - Math.floor(score/2)) === 0) {
+                let side = Math.floor(Math.random()*4);
+                let ex, ey;
+                if(side===0) { ex=Math.random()*width; ey=-50; }
+                else if(side===1) { ex=width+50; ey=Math.random()*height; }
+                else if(side===2) { ex=Math.random()*width; ey=height+50; }
+                else { ex=-50; ey=Math.random()*height; }
+                enemies.push({ x: ex, y: ey, s: 12, life: 0 });
+                play('spawn');
+            }
+
+            // Move & Draw Enemies
+            for(let i=0; i<enemies.length; i++) {
+                let e = enemies[i];
+                e.life++;
+                let dx = player.x - e.x, dy = player.y - e.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                e.x += (dx/dist) * enemySpeed;
+                e.y += (dy/dist) * enemySpeed;
+                
+                // Draw line to player
+                ctx.strokeStyle = 'rgba(255,0,0,0.2)'; ctx.beginPath();
+                ctx.moveTo(e.x, e.y); ctx.lineTo(player.x, player.y); ctx.stroke();
+
+                ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
+                ctx.beginPath(); ctx.rect(e.x - e.s/2, e.y - e.s/2, e.s, e.s); ctx.fill();
+                ctx.shadowBlur = 0;
+
+                if(dist < player.s + e.s/2) {
+                    createP(player.x, player.y, '#ff0000', 100); play('die');
+                    isDead = true; document.body.style.cursor = 'default';
+                    document.getElementById('goScreen').style.display='block';
+                    document.getElementById('finalScore').innerText=(score/60).toFixed(1);
+                    canvas.classList.add('glitch'); setTimeout(()=>canvas.classList.remove('glitch'),500);
+                }
+            }
+
+            // Particles
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=0.04;
+                ctx.fillStyle=p.c; ctx.globalAlpha=Math.max(0,p.life);
+                ctx.fillRect(p.x,p.y, 3, 3); ctx.globalAlpha=1;
+                if(p.life<=0){particles.splice(i,1);i--;}
+            }
+
+            frame++;
+            score++;
+            scoreEl.innerText = (score/60).toFixed(1) + 's';
+            if(frame % 300 === 0) { enemySpeed += 0.3; } // speed up every 5s
+        }
+        loop();
+    </script>
+</body>
+</html>
