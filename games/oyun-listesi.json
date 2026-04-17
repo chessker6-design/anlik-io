@@ -4,5 +4,29 @@
     "isim": "Neon Kaçış",
     "kategori": "Refleks",
     "resim": "https://picsum.photos/id/102/400/400"
+  },
+  {
+    "id": "kripto-cokus",
+    "isim": "Kripto Çöküşü",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/103/400/400"
+  },
+  {
+    "id": "siber-kalkan",
+    "isim": "Siber Kalkan",
+    "kategori": "Strateji",
+    "resim": "https://picsum.photos/id/104/400/400"
+  },
+  {
+    "id": "drone-kurye",
+    "isim": "Drone Kurye",
+    "kategori": "Aksiyon",
+    "resim": "https://picsum.photos/id/106/400/400"
+  },
+  {
+    "id": "yapay-zeka-isyani",
+    "isim": "Yapay Zeka İsyanı",
+    "kategori": "Hayatta Kalma",
+    "resim": "https://picsum.photos/id/107/400/400"
   }
 ]
