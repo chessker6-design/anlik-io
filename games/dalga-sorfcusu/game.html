@@ -67,7 +67,7 @@
     resize(); addEventListener('resize', resize);
 
     let ac;
-    function initA() { if(ac)return; ac=new(AudioContext||webkitAudioContext)(); }
+    function initA() { if(ac)return; const ACtx=window.AudioContext||window.webkitAudioContext; if(ACtx)ac=new ACtx(); }
     function snd(t){
         if(!ac||ac.state==='suspended')return;
         const o=ac.createOscillator(),g=ac.createGain();
@@ -355,7 +355,7 @@
 
     let last=0;
     function loop(ts) {
-        let dt=Math.min((ts-last)/16.67,3); last=ts;
+        if(!ts) ts=performance.now(); let dt=last===0?1:Math.min((ts-last)/16.67,3); last=ts;
         update(dt); draw();
         requestAnimationFrame(loop);
     }
