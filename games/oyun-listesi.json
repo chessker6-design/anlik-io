@@ -28,5 +28,35 @@
     "isim": "Yapay Zeka İsyanı",
     "kategori": "Hayatta Kalma",
     "resim": "https://picsum.photos/id/107/400/400"
+  },
+  {
+    "id": "yercekimi-darbesi",
+    "isim": "Yerçekimi Darbesi",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/110/400/400"
+  },
+  {
+    "id": "dalga-sorfcusu",
+    "isim": "Dalga Sörfcüsü",
+    "kategori": "Aksiyon",
+    "resim": "https://picsum.photos/id/111/400/400"
+  },
+  {
+    "id": "golge-avcisi",
+    "isim": "Gölge Avcısı",
+    "kategori": "Hayatta Kalma",
+    "resim": "https://picsum.photos/id/112/400/400"
+  },
+  {
+    "id": "renk-patlamasi",
+    "isim": "Renk Patlaması",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/113/400/400"
+  },
+  {
+    "id": "kuantum-tuneli",
+    "isim": "Kuantum Tüneli",
+    "kategori": "Aksiyon",
+    "resim": "https://picsum.photos/id/114/400/400"
   }
 ]
