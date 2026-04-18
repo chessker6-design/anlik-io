@@ -1,62 +1,32 @@
 [
   {
     "id": "neon-kacis",
-    "title": "Neon Kaçış",
-    "category": "Arcade",
-    "image": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=400&h=500&fit=crop&q=80"
+    "isim": "Neon Kaçış",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/102/400/400"
   },
   {
     "id": "kripto-cokus",
-    "title": "Kripto Çöküşü",
-    "category": "Strateji",
-    "image": "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400&h=500&fit=crop&q=80"
+    "isim": "Kripto Çöküşü",
+    "kategori": "Refleks",
+    "resim": "https://picsum.photos/id/103/400/400"
   },
   {
     "id": "siber-kalkan",
-    "title": "Siber Kalkan",
-    "category": "Strateji",
-    "image": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=500&fit=crop&q=80"
+    "isim": "Siber Kalkan",
+    "kategori": "Strateji",
+    "resim": "https://picsum.photos/id/104/400/400"
   },
   {
     "id": "drone-kurye",
-    "title": "Drone Kurye",
-    "category": "Aksiyon",
-    "image": "https://images.unsplash.com/photo-1473968512647-3e447244af8f?w=400&h=500&fit=crop&q=80"
+    "isim": "Drone Kurye",
+    "kategori": "Aksiyon",
+    "resim": "https://picsum.photos/id/106/400/400"
   },
   {
     "id": "yapay-zeka-isyani",
-    "title": "Yapay Zeka İsyanı",
-    "category": "Macera",
-    "image": "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400&h=500&fit=crop&q=80"
-  },
-  {
-    "id": "yercekimi-darbesi",
-    "title": "Yerçekimi Darbesi",
-    "category": "Aksiyon",
-    "image": "https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=400&h=500&fit=crop&q=80"
-  },
-  {
-    "id": "dalga-sorfcusu",
-    "title": "Dalga Sörfcüsü",
-    "category": "Yarış",
-    "image": "https://images.unsplash.com/photo-1502680390548-bdbac40e4a9f?w=400&h=500&fit=crop&q=80"
-  },
-  {
-    "id": "golge-avcisi",
-    "title": "Gölge Avcısı",
-    "category": "Aksiyon",
-    "image": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&h=500&fit=crop&q=80"
-  },
-  {
-    "id": "renk-patlamasi",
-    "title": "Renk Patlaması",
-    "category": "Zeka",
-    "image": "https://images.unsplash.com/photo-1550684376-efcbd6e3f031?w=400&h=500&fit=crop&q=80"
-  },
-  {
-    "id": "kuantum-tuneli",
-    "title": "Kuantum Tüneli",
-    "category": "Zeka",
-    "image": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=500&fit=crop&q=80"
+    "isim": "Yapay Zeka İsyanı",
+    "kategori": "Hayatta Kalma",
+    "resim": "https://picsum.photos/id/107/400/400"
   }
 ]
