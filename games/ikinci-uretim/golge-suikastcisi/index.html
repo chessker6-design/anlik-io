@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gölge Suikastçısı</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #0b0c10;
+            overflow: hidden; font-family: 'Courier New', Courier, monospace;
+            user-select: none; -webkit-user-select: none;
+        }
+        canvas { display: block; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #fff; z-index: 10; text-shadow: 0 0 10px #fff; }
+        #message {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff0000; font-size: 30px; text-align: center; text-shadow: 0 0 20px #ff0000;
+            display: none; z-index: 20; cursor: pointer;
+        }
+        #mobile-controls {
+            position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 40px; z-index: 10;
+        }
+        .joy-bg { width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); position: relative; touch-action: none; }
+        .joy-knob { width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; position: absolute; top: 30px; left: 30px; border: 2px solid #fff; pointer-events: none;}
+        @media (min-width: 768px) { #mobile-controls { display: none; } }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>GÖLGE SUİKASTÇISI</h2>
+        <p>Işıklara Yakalanma!</p>
+        <p>Seviye: <span id="lvlDisp">1</span></p>
+    </div>
+    <div id="message"></div>
+    <div id="mobile-controls">
+        <div class="joy-bg" id="joystick"><div class="joy-knob" id="knob"></div></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const msg = document.getElementById('message');
+        const lvlDisp = document.getElementById('lvlDisp');
+
+        let width, height;
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Inputs
+        const keys = { w:false, a:false, s:false, d:false };
+        window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+        // Joystick
+        const joyBg = document.getElementById('joystick');
+        const knob = document.getElementById('knob');
+        let joyActive = false, joyVec = {x:0, y:0};
+        joyBg.addEventListener('touchstart', handleJoy, {passive: false});
+        joyBg.addEventListener('touchmove', handleJoy, {passive: false});
+        joyBg.addEventListener('touchend', () => { joyActive = false; joyVec = {x:0, y:0}; knob.style.transform = 'translate(0px, 0px)'; });
+        function handleJoy(e) {
+            e.preventDefault();
+            joyActive = true;
+            let rect = joyBg.getBoundingClientRect();
+            let touch = e.touches[0];
+            let tx = touch.clientX - rect.left - 50;
+            let ty = touch.clientY - rect.top - 50;
+            let dist = Math.min(50, Math.hypot(tx, ty));
+            let angle = Math.atan2(ty, tx);
+            joyVec.x = Math.cos(angle) * (dist/50);
+            joyVec.y = Math.sin(angle) * (dist/50);
+            knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+        }
+
+        // Game State
+        let state = 'playing';
+        let level = 1;
+        const player = { x: 50, y: 50, radius: 10, speed: 3 };
+        let guards = [];
+        let particles = [];
+        let target = { x: 0, y: 0, radius: 20 };
+
+        function initLevel() {
+            player.x = 50; player.y = 50;
+            target.x = width - 50; target.y = height - 50;
+            guards = [];
+            for(let i=0; i<level+1; i++) {
+                guards.push({
+                    x: Math.random() * (width - 200) + 100,
+                    y: Math.random() * (height - 200) + 100,
+                    angle: Math.random() * Math.PI * 2,
+                    speed: 1 + Math.random(),
+                    turnSpeed: 0.02 + Math.random()*0.02
+                });
+            }
+            state = 'playing';
+            msg.style.display = 'none';
+            lvlDisp.innerText = level;
+        }
+
+        function update() {
+            if (state !== 'playing') return;
+            
+            let vx = 0, vy = 0;
+            if(keys.w) vy -= 1; if(keys.s) vy += 1;
+            if(keys.a) vx -= 1; if(keys.d) vx += 1;
+            if(joyActive) { vx = joyVec.x; vy = joyVec.y; }
+            
+            if(vx !== 0 || vy !== 0) {
+                let len = Math.hypot(vx, vy);
+                player.x += (vx/len) * player.speed;
+                player.y += (vy/len) * player.speed;
+                // Trail
+                if(Math.random()>0.5) particles.push({x:player.x, y:player.y, life:1.0});
+            }
+            player.x = Math.max(10, Math.min(width-10, player.x));
+            player.y = Math.max(10, Math.min(height-10, player.y));
+
+            // Target check
+            if (Math.hypot(player.x - target.x, player.y - target.y) < player.radius + target.radius) {
+                level++;
+                initLevel();
+                return;
+            }
+
+            // Guards
+            for(let g of guards) {
+                g.angle += g.turnSpeed;
+                g.x += Math.cos(g.angle) * g.speed;
+                g.y += Math.sin(g.angle) * g.speed;
+                if(g.x < 0 || g.x > width) g.angle = Math.PI - g.angle;
+                if(g.y < 0 || g.y > height) g.angle = -g.angle;
+
+                // Sight check (cone)
+                let pdx = player.x - g.x;
+                let pdy = player.y - g.y;
+                let dist = Math.hypot(pdx, pdy);
+                if (dist < 150) {
+                    let pAngle = Math.atan2(pdy, pdx);
+                    let diff = Math.abs(pAngle - (g.angle % (Math.PI*2)));
+                    if (diff > Math.PI) diff = Math.PI*2 - diff;
+                    if (diff < 0.6) {
+                        state = 'gameover';
+                        msg.innerHTML = "YAKALANDIN!<br><span style='font-size:16px;color:#fff;'>Tıklayarak Yeniden Başla</span>";
+                        msg.style.display = 'block';
+                    }
+                }
+            }
+
+            for(let i=particles.length-1; i>=0; i--) {
+                particles[i].life -= 0.05;
+                if(particles[i].life <= 0) particles.splice(i,1);
+            }
+        }
+
+        msg.addEventListener('click', () => { if(state === 'gameover') { level=1; initLevel(); } });
+
+        function draw() {
+            ctx.fillStyle = '#0b0c10'; ctx.fillRect(0, 0, width, height);
+
+            // Target
+            ctx.fillStyle = '#45a29e'; ctx.beginPath(); ctx.arc(target.x, target.y, target.radius, 0, Math.PI*2); ctx.fill();
+            
+            // Guards Sight
+            for(let g of guards) {
+                ctx.fillStyle = 'rgba(255,0,0,0.2)';
+                ctx.beginPath();
+                ctx.moveTo(g.x, g.y);
+                ctx.arc(g.x, g.y, 150, g.angle - 0.6, g.angle + 0.6);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath(); ctx.arc(g.x, g.y, 8, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Particles
+            ctx.fillStyle = '#fff';
+            for(let p of particles) {
+                ctx.globalAlpha = p.life * 0.5;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+
+            // Player
+            if(state === 'playing') {
+                ctx.fillStyle = '#fff'; ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function loop() { update(); draw(); requestAnimationFrame(loop); }
+        initLevel(); loop();
+    </script>
+</body>
+</html>

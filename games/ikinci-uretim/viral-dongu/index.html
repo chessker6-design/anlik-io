@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Viral Döngü</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: #020205;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #ui {
+            width: 100%;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 600px;
+        }
+
+        #score {
+            font-size: 1.2rem;
+            color: #0ff;
+        }
+
+        #cooldownBar {
+            width: 100px;
+            height: 10px;
+            background: #222;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #cooldownFill {
+            width: 100%;
+            height: 100%;
+            background: #0f0;
+            transition: width 0.1s;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1;
+            margin-top: 10px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #050510;
+            border: 2px solid #1a1a3a;
+            border-radius: 8px;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #overlay.active {
+            pointer-events: all;
+            opacity: 1;
+        }
+
+        #overlay h2 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #f44;
+            text-shadow: 0 0 20px #f44;
+        }
+
+        #overlay button {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            background: #1a1a3a;
+            color: #0ff;
+            border: 2px solid #0ff;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <div id="score">Süre: 0s</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:0.8rem;color:#aaa;">Duvar</span>
+            <div id="cooldownBar">
+                <div id="cooldownFill"></div>
+            </div>
+        </div>
+    </div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="overlay">
+            <h2 id="endTitle">Viral Salgın!</h2>
+            <button id="restartBtn">Tekrar Dene</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const cooldownFill = document.getElementById('cooldownFill');
+        const overlay = document.getElementById('overlay');
+        const endTitle = document.getElementById('endTitle');
+        const restartBtn = document.getElementById('restartBtn');
+
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playBlip() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function playSpread() {
+            if (!audioCtx) return;
+            const bufferSize = audioCtx.sampleRate * 0.1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.1;
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        const GRID = 24;
+        let cellSize = 0;
+        let grid = [];
+        let lastUpdate = 0;
+        let updateInterval = 800;
+        let startTime = 0;
+        let gameRunning = false;
+        let cooldown = 0;
+        const COOLDOWN_MAX = 800;
+        let animationId;
+
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            cellSize = Math.min(canvas.width / GRID, canvas.height / GRID);
+        }
+        window.addEventListener('resize', resize);
+
+        function createGrid() {
+            grid = [];
+            for (let y = 0; y < GRID; y++) {
+                const row = [];
+                for (let x = 0; x < GRID; x++) {
+                    row.push(0);
+                }
+                grid.push(row);
+            }
+            const cx = Math.floor(GRID / 2);
+            const cy = Math.floor(GRID / 2);
+            for (let y = cy - 2; y <= cy + 2; y++) {
+                for (let x = cx - 2; x <= cx + 2; x++) {
+                    if (y >= 0 && y < GRID && x >= 0 && x < GRID && Math.random() > 0.3) {
+                        grid[y][x] = 1;
+                    }
+                }
+            }
+        }
+
+        function updateVirus() {
+            const newGrid = grid.map(row => [...row]);
+            let spreadCount = 0;
+
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    if (grid[y][x] === 1) {
+                        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                        for (const [dx, dy] of neighbors) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < GRID && ny >= 0 && ny < GRID && grid[ny][nx] === 0) {
+                                if (Math.random() < 0.45) {
+                                    newGrid[ny][nx] = 1;
+                                    spreadCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (spreadCount > 0) playSpread();
+
+            const virusCount = newGrid.flat().filter(c => c === 1).length;
+            const emptyCount = newGrid.flat().filter(c => c === 0).length;
+
+            if (emptyCount === 0) {
+                endGame(false);
+            } else if (virusCount === 0) {
+                endGame(true);
+            }
+
+            grid = newGrid;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const offsetX = (canvas.width - GRID * cellSize) / 2;
+            const offsetY = (canvas.height - GRID * cellSize) / 2;
+            const time = Date.now();
+
+            for (let y = 0; y < GRID; y++) {
+                for (let x = 0; x < GRID; x++) {
+                    const cx = offsetX + x * cellSize;
+                    const cy = offsetY + y * cellSize;
+                    const type = grid[y][x];
+
+                    if (type === 1) {
+                        const pulse = 0.8 + Math.sin(time / 200 + x + y) * 0.2;
+                        ctx.fillStyle = '#f00';
+                        ctx.shadowColor = '#f00';
+                        ctx.shadowBlur = 10 * pulse;
+                        const pad = cellSize * (1 - pulse) / 2;
+                        ctx.fillRect(cx + pad, cy + pad, cellSize - pad * 2, cellSize - pad * 2);
+                        ctx.shadowBlur = 0;
+                    } else if (type === 2) {
+                        ctx.fillStyle = '#00aaff';
+                        ctx.shadowColor = '#00aaff';
+                        ctx.shadowBlur = 8;
+                        ctx.fillRect(cx + 2, cy + 2, cellSize - 4, cellSize - 4);
+                        ctx.shadowBlur = 0;
+                    } else {
+                        ctx.strokeStyle = '#111';
+                        ctx.strokeRect(cx, cy, cellSize, cellSize);
+                    }
+                }
+            }
+
+            if (gameRunning && cooldown > 0) {
+                cooldown -= 16;
+                if (cooldown < 0) cooldown = 0;
+                cooldownFill.style.width = ((COOLDOWN_MAX - cooldown) / COOLDOWN_MAX * 100) + '%';
+            }
+
+            if (gameRunning && time - lastUpdate > updateInterval) {
+                updateVirus();
+                lastUpdate = time;
+                scoreEl.textContent = `Süre: ${Math.floor((time - startTime) / 1000)}s`;
+            }
+
+            animationId = requestAnimationFrame(draw);
+        }
+
+        function placeWall(x, y) {
+            if (!gameRunning) return;
+            if (cooldown > 0) return;
+            if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+            if (grid[y][x] !== 0) return;
+
+            initAudio();
+            grid[y][x] = 2;
+            cooldown = COOLDOWN_MAX;
+            playBlip();
+        }
+
+        function getCellFromEvent(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            const offsetX = (canvas.width - GRID * cellSize) / 2;
+            const offsetY = (canvas.height - GRID * cellSize) / 2;
+            const col = Math.floor((x - offsetX) / cellSize);
+            const row = Math.floor((y - offsetY) / cellSize);
+            return { x: col, y: row };
+        }
+
+        function handleInput(e) {
+            e.preventDefault();
+            const cell = getCellFromEvent(e);
+            if (cell) placeWall(cell.x, cell.y);
+        }
+
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', handleInput, { passive: false });
+
+        function startGame() {
+            initAudio();
+            resize();
+            createGrid();
+            startTime = Date.now();
+            lastUpdate = Date.now();
+            gameRunning = true;
+            cooldown = 0;
+            overlay.classList.remove('active');
+            if (animationId) cancelAnimationFrame(animationId);
+            draw();
+        }
+
+        function endGame(win) {
+            gameRunning = false;
+            endTitle.textContent = win ? 'VİRÜS TEMİZLENDİ!' : 'SALGIN YAYILDI!';
+            endTitle.style.color = win ? '#0f0' : '#f44';
+            overlay.classList.add('active');
+        }
+
+        restartBtn.addEventListener('click', startGame);
+
+        startGame();
+    </script>
+</body>
+
+</html>

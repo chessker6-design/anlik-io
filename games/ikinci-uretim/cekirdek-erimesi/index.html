@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Çekirdek Erimesi</title>
+    <style>
+        :root {
+            --panel: rgba(10, 12, 18, .68);
+            --line: rgba(255, 255, 255, .1);
+            --text: #f5f7ff;
+            --muted: #a9b2c9;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            background:
+                radial-gradient(circle at 50% 20%, #231011 0%, #090b11 55%, #030407 100%);
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            color: var(--text);
+        }
+
+        #wrap {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%
+        }
+
+        #hud {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 12px
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 10px 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, .24)
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: 900
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.35
+        }
+
+        .status {
+            font-size: 13px;
+            font-weight: 800
+        }
+
+        .bad {
+            color: #ff7a8d
+        }
+
+        .good {
+            color: #99ffd4
+        }
+
+        #controls {
+            position: absolute;
+            inset: 0;
+            pointer-events: none
+        }
+
+        .ctrl {
+            position: absolute;
+            pointer-events: auto
+        }
+
+        #stickZone {
+            left: 12px;
+            bottom: 14px;
+            width: min(34vw, 180px);
+            height: min(34vw, 180px);
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 190, .12), rgba(255, 255, 255, .03));
+            border: 1px solid rgba(255, 255, 255, .10);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, .22)
+        }
+
+        #stick {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 42%;
+            height: 42%;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .25), rgba(0, 255, 190, .38));
+            border: 1px solid rgba(255, 255, 255, .12)
+        }
+
+        #repairBtn {
+            right: 18px;
+            bottom: 24px;
+            width: min(27vw, 146px);
+            height: min(27vw, 146px);
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .24), rgba(255, 110, 60, .34));
+            border: 1px solid rgba(255, 255, 255, .15);
+            display: grid;
+            place-items: center;
+            font-weight: 900;
+            font-size: min(5vw, 26px);
+            color: #fff;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, .25)
+        }
+
+        #repairBtn:active {
+            transform: scale(.96)
+        }
+
+        #center {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background: rgba(6, 8, 12, .46);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 22px;
+            backdrop-filter: blur(8px);
+            padding: 18px 22px;
+            text-align: center;
+            opacity: 0;
+            transition: .25s ease;
+            min-width: min(88vw, 520px)
+        }
+
+        #center.show {
+            opacity: 1
+        }
+
+        #center h1 {
+            margin: 0 0 8px;
+            font-size: clamp(22px, 4vw, 38px)
+        }
+
+        #center p {
+            margin: 0;
+            color: #d8dff0;
+            line-height: 1.4
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrap">
+        <canvas id="game"></canvas>
+
+        <div id="hud">
+            <div class="topbar">
+                <div class="panel">
+                    <div class="title">Çekirdek Erimesi</div>
+                    <div class="small">WASD / Yön Tuşları + <b>E</b>/<b>Boşluk</b> · Mobilde joystick + <b>TAMİR</b>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div id="info" class="status">Süre: 40.0 sn · Radyasyon: 0%</div>
+                    <div id="subInfo" class="small">Bozulan borulara koş, tamiri basılı tut, sızıntılardan kaç.</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div id="stickZone" class="ctrl">
+                <div id="stick"></div>
+            </div>
+            <div id="repairBtn" class="ctrl">TAMİR</div>
+        </div>
+
+        <div id="center">
+            <h1 id="centerTitle">Başla</h1>
+            <p id="centerText">Tıkla / Dokun ve reaktörü ayakta tut.</p>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const canvas = document.getElementById('game');
+            const ctx = canvas.getContext('2d');
+            const wrap = document.getElementById('wrap');
+            const stickZone = document.getElementById('stickZone');
+            const stick = document.getElementById('stick');
+            const repairBtn = document.getElementById('repairBtn');
+            const info = document.getElementById('info');
+            const subInfo = document.getElementById('subInfo');
+            const center = document.getElementById('center');
+            const centerTitle = document.getElementById('centerTitle');
+            const centerText = document.getElementById('centerText');
+
+            const DPR = Math.min(window.devicePixelRatio || 1, 2);
+            const W = 1280, H = 720;
+            const view = { scale: 1, ox: 0, oy: 0, w: innerWidth, h: innerHeight };
+
+            const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+            const lerp = (a, b, t) => a + (b - a) * t;
+            const rand = (a, b) => a + Math.random() * (b - a);
+            const dist = (a, b, c, d) => Math.hypot(c - a, d - b);
+
+            function resize() {
+                view.w = innerWidth; view.h = innerHeight;
+                view.scale = Math.min(view.w / W, view.h / H);
+                view.ox = (view.w - W * view.scale) / 2;
+                view.oy = (view.h - H * view.scale) / 2;
+                canvas.width = Math.round(view.w * DPR);
+                canvas.height = Math.round(view.h * DPR);
+            }
+            addEventListener('resize', resize);
+            resize();
+
+            let audioCtx = null, master = null;
+            function ensureAudio() {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    master = audioCtx.createGain();
+                    master.gain.value = 0.23;
+                    master.connect(audioCtx.destination);
+                }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }
+            addEventListener('pointerdown', ensureAudio, { once: true });
+            addEventListener('keydown', ensureAudio, { once: true });
+
+            function tone(freq, dur, type = 'sine', vol = 0.07, when = 0) {
+                if (!audioCtx) return;
+                const t = audioCtx.currentTime + when;
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                o.connect(g).connect(master);
+                o.start(t); o.stop(t + dur + 0.03);
+            }
+            function noiseBurst(dur = 0.14, vol = 0.06, hp = 300, lp = 6000) {
+                if (!audioCtx) return;
+                const len = Math.floor(audioCtx.sampleRate * dur);
+                const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+                const src = audioCtx.createBufferSource();
+                src.buffer = buf;
+                const h = audioCtx.createBiquadFilter();
+                h.type = 'highpass'; h.frequency.value = hp;
+                const l = audioCtx.createBiquadFilter();
+                l.type = 'lowpass'; l.frequency.value = lp;
+                const g = audioCtx.createGain();
+                const t = audioCtx.currentTime;
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.linearRampToValueAtTime(vol, t + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                src.connect(h).connect(l).connect(g).connect(master);
+                src.start(t); src.stop(t + dur + 0.03);
+            }
+            function playGeiger(danger) {
+                noiseBurst(0.025, 0.03 + danger * 0.03, 2400, 7600);
+            }
+            function playHiss() {
+                noiseBurst(0.11, 0.035, 900, 4200);
+            }
+            function playRepairClick() {
+                tone(950, 0.03, 'square', 0.04, 0);
+                tone(620, 0.05, 'triangle', 0.03, 0.015);
+            }
+            function playFail() {
+                tone(160, 0.22, 'sawtooth', 0.09, 0);
+                tone(110, 0.25, 'square', 0.05, 0.09);
+            }
+
+            const input = {
+                keys: Object.create(null),
+                jx: 0, jy: 0,
+                repairHeld: false
+            };
+            addEventListener('keydown', e => {
+                input.keys[e.code] = true;
+                if (e.code === 'KeyE' || e.code === 'Space') input.repairHeld = true;
+            });
+            addEventListener('keyup', e => {
+                input.keys[e.code] = false;
+                if (e.code === 'KeyE' || e.code === 'Space') input.repairHeld = false;
+            });
+
+            let joyPointer = null;
+            function updateStick(e) {
+                const r = stickZone.getBoundingClientRect();
+                const cx = r.left + r.width / 2;
+                const cy = r.top + r.height / 2;
+                let dx = e.clientX - cx, dy = e.clientY - cy;
+                const max = r.width * 0.28;
+                const m = Math.hypot(dx, dy) || 1;
+                if (m > max) { dx = dx / m * max; dy = dy / m * max; }
+                stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                input.jx = dx / max; input.jy = dy / max;
+            }
+            stickZone.addEventListener('pointerdown', e => { joyPointer = e.pointerId; stickZone.setPointerCapture(e.pointerId); updateStick(e); });
+            stickZone.addEventListener('pointermove', e => { if (joyPointer === e.pointerId) updateStick(e); });
+            function resetStick() { joyPointer = null; input.jx = 0; input.jy = 0; stick.style.transform = 'translate(-50%,-50%)'; }
+            ['pointerup', 'pointercancel'].forEach(t => stickZone.addEventListener(t, e => { if (joyPointer === e.pointerId) resetStick(); }));
+
+            repairBtn.addEventListener('pointerdown', e => { repairBtn.setPointerCapture(e.pointerId); input.repairHeld = true; });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => repairBtn.addEventListener(t, () => input.repairHeld = false));
+
+            function showCenter(title, text) {
+                centerTitle.textContent = title;
+                centerText.textContent = text;
+                center.classList.add('show');
+            }
+            function hideCenter() { center.classList.remove('show'); }
+
+            class Pipe {
+                constructor(index, angle) {
+                    this.index = index;
+                    this.angle = angle;
+                    this.baseR = 110;
+                    this.tipR = 220;
+                    this.state = 'ok';
+                    this.repair = 0;
+                    this.brokenAt = 0;
+                    this.hissClock = 0;
+                }
+                get base() {
+                    return {
+                        x: reactor.x + Math.cos(this.angle) * this.baseR,
+                        y: reactor.y + Math.sin(this.angle) * this.baseR
+                    };
+                }
+                get tip() {
+                    return {
+                        x: reactor.x + Math.cos(this.angle) * this.tipR,
+                        y: reactor.y + Math.sin(this.angle) * this.tipR
+                    };
+                }
+                breakAt(time) {
+                    this.state = 'broken';
+                    this.repair = 0;
+                    this.brokenAt = time;
+                    for (let i = 0; i < 18; i++) spawnParticle(this.tip.x, this.tip.y, 'steam');
+                    playHiss();
+                }
+                fix() {
+                    this.state = 'ok';
+                    this.repair = 0;
+                    for (let i = 0; i < 12; i++) spawnParticle(this.tip.x, this.tip.y, 'spark');
+                }
+                update(dt, gameTime) {
+                    if (this.state !== 'broken') return;
+                    this.hissClock -= dt;
+                    if (this.hissClock <= 0) {
+                        this.hissClock = rand(0.18, 0.34);
+                        playHiss();
+                    }
+
+                    const t = this.tip;
+                    for (let i = 0; i < 2; i++) spawnParticle(t.x, t.y, Math.random() < 0.7 ? 'steam' : 'acid');
+
+                    const d = dist(player.x, player.y, t.x, t.y);
+                    if (d < 44) reactor.radiation = clamp(reactor.radiation + 36 * dt, 0, 100);
+
+                    if (game.targetPipe === this && input.repairHeld) {
+                        this.repair += dt * (1.05 + reactor.combo * 0.12);
+                        if (game.repairSfx <= 0) {
+                            game.repairSfx = 0.085;
+                            playRepairClick();
+                        }
+                        if (this.repair >= 1) {
+                            const age = gameTime - this.brokenAt;
+                            if (age < 2.8) reactor.combo++;
+                            else reactor.combo = 1;
+                            reactor.score += 100 * reactor.combo;
+                            reactor.timeLeft = Math.min(60, reactor.timeLeft + 3.7 + reactor.combo * 0.7);
+                            this.fix();
+                        }
+                    } else {
+                        this.repair = Math.max(0, this.repair - dt * 0.25);
+                    }
+                }
+                draw() {
+                    const b = this.base;
+                    const t = this.tip;
+                    ctx.save();
+                    ctx.lineCap = 'round';
+                    ctx.lineWidth = 22;
+                    ctx.strokeStyle = '#394255';
+                    ctx.beginPath();
+                    ctx.moveTo(reactor.x, reactor.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = this.state === 'broken' ? '#ff5a59' : '#74ffd2';
+                    ctx.beginPath();
+                    ctx.moveTo(b.x, b.y);
+                    if (this.state === 'broken') {
+                        const mx = lerp(b.x, t.x, 0.66), my = lerp(b.y, t.y, 0.66);
+                        ctx.lineTo(mx, my);
+                        ctx.stroke();
+
+                        ctx.strokeStyle = '#0f121a';
+                        ctx.lineWidth = 16;
+                        ctx.beginPath();
+                        ctx.moveTo(mx + Math.cos(this.angle) * 10, my + Math.sin(this.angle) * 10);
+                        ctx.lineTo(t.x - Math.cos(this.angle) * 18, t.y - Math.sin(this.angle) * 18);
+                        ctx.stroke();
+                    } else {
+                        ctx.lineTo(t.x, t.y);
+                        ctx.stroke();
+                    }
+
+                    ctx.fillStyle = this.state === 'broken' ? '#ff8682' : '#9efedb';
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, 18, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (this.state === 'broken') {
+                        ctx.fillStyle = 'rgba(255,90,89,.12)';
+                        ctx.beginPath();
+                        ctx.arc(t.x, t.y, 48, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        if (this.repair > 0) {
+                            ctx.strokeStyle = 'rgba(255,255,255,.18)';
+                            ctx.lineWidth = 8;
+                            ctx.beginPath();
+                            ctx.arc(t.x, t.y - 34, 24, -Math.PI * 0.9, -Math.PI * 0.9 + Math.PI * 1.8 * this.repair);
+                            ctx.stroke();
+                        }
+                    }
+                    ctx.restore();
+                }
+            }
+
+            const reactor = {
+                x: W / 2,
+                y: H / 2,
+                timeLeft: 40,
+                radiation: 0,
+                combo: 1,
+                score: 0
+            };
+
+            const player = {
+                x: W / 2,
+                y: H - 120,
+                r: 16,
+                speed: 260,
+                facing: 0
+            };
+
+            const game = {
+                state: 'intro',
+                time: 0,
+                pipes: [],
+                particles: [],
+                nextBreak: 1.4,
+                targetPipe: null,
+                geigerClock: 0,
+                repairSfx: 0,
+                shake: 0,
+                flash: 0,
+                best: Number(localStorage.getItem('core_meltdown_best') || 0)
+            };
+
+            function resetGame() {
+                reactor.timeLeft = 40;
+                reactor.radiation = 0;
+                reactor.combo = 1;
+                reactor.score = 0;
+                player.x = W / 2;
+                player.y = H - 120;
+                game.time = 0;
+                game.nextBreak = 1.5;
+                game.targetPipe = null;
+                game.geigerClock = 0;
+                game.repairSfx = 0;
+                game.shake = 0;
+                game.flash = 0;
+                game.particles.length = 0;
+                game.pipes = [];
+                for (let i = 0; i < 8; i++) game.pipes.push(new Pipe(i, (-Math.PI / 2) + i * (Math.PI * 2 / 8)));
+                game.state = 'playing';
+                hideCenter();
+                updateHud();
+            }
+
+            function spawnParticle(x, y, type) {
+                if (type === 'steam') {
+                    game.particles.push({
+                        x, y, vx: rand(-30, 30), vy: rand(-90, -30),
+                        life: rand(0.32, 0.6), maxLife: 1, size: rand(10, 18), type
+                    });
+                } else if (type === 'acid') {
+                    game.particles.push({
+                        x, y, vx: rand(-50, 50), vy: rand(-40, 15),
+                        life: rand(0.28, 0.48), maxLife: 1, size: rand(4, 8), type
+                    });
+                } else {
+                    game.particles.push({
+                        x, y, vx: rand(-120, 120), vy: rand(-120, 120),
+                        life: rand(0.16, 0.3), maxLife: 1, size: rand(2, 5), type
+                    });
+                }
+            }
+
+            function updateHud() {
+                if (game.state === 'playing') {
+                    info.innerHTML = `Süre: ${reactor.timeLeft.toFixed(1)} sn · Radyasyon: ${Math.round(reactor.radiation)}% · Kombo: <span class="good">x${reactor.combo}</span>`;
+                    subInfo.textContent = `Skor: ${reactor.score} · En iyi: ${game.best}`;
+                } else if (game.state === 'over') {
+                    info.innerHTML = `Reaktör çöktü · <span class="bad">Kritik başarısızlık</span>`;
+                    subInfo.textContent = `Skor: ${reactor.score} · En iyi: ${game.best}`;
+                }
+            }
+
+            function gameOver() {
+                if (game.state !== 'playing') return;
+                game.state = 'over';
+                playFail();
+                game.flash = 1;
+                game.best = Math.max(game.best, reactor.score);
+                localStorage.setItem('core_meltdown_best', game.best);
+                updateHud();
+                showCenter('ÇEKİRDEK ERİMESİ', 'Yeniden başlamak için dokun veya R tuşuna bas.');
+            }
+
+            function nearestBrokenPipe() {
+                let best = null;
+                let bestD = Infinity;
+                for (const p of game.pipes) {
+                    if (p.state !== 'broken') continue;
+                    const t = p.tip;
+                    const d = dist(player.x, player.y, t.x, t.y);
+                    if (d < 88 && d < bestD) { bestD = d; best = p; }
+                }
+                return best;
+            }
+
+            function update(dt) {
+                if (game.state === 'intro' || game.state === 'over') {
+                    updateParticles(dt);
+                    return;
+                }
+
+                game.time += dt;
+                game.flash = Math.max(0, game.flash - dt * 1.4);
+                game.repairSfx -= dt;
+
+                let mx = input.jx + (input.keys.KeyD || input.keys.ArrowRight ? 1 : 0) - (input.keys.KeyA || input.keys.ArrowLeft ? 1 : 0);
+                let my = input.jy + (input.keys.KeyS || input.keys.ArrowDown ? 1 : 0) - (input.keys.KeyW || input.keys.ArrowUp ? 1 : 0);
+                const mm = Math.hypot(mx, my);
+                if (mm > 1) { mx /= mm; my /= mm; }
+
+                if (mm > 0.001) {
+                    player.facing = Math.atan2(my, mx);
+                    player.x = clamp(player.x + mx * player.speed * dt, 26, W - 26);
+                    player.y = clamp(player.y + my * player.speed * dt, 26, H - 26);
+                }
+
+                if (game.time >= game.nextBreak) {
+                    const ok = game.pipes.filter(p => p.state === 'ok');
+                    if (ok.length) {
+                        ok[Math.floor(Math.random() * ok.length)].breakAt(game.time);
+                        game.nextBreak = game.time + rand(1.55, 3.15);
+                    }
+                }
+
+                game.targetPipe = nearestBrokenPipe();
+
+                const brokenCount = game.pipes.filter(p => p.state === 'broken').length;
+                const drain = 0.75 + brokenCount * 1.45 + reactor.radiation * 0.01;
+                reactor.timeLeft -= dt * drain;
+                reactor.radiation = clamp(reactor.radiation - dt * (brokenCount === 0 ? 10 : 4), 0, 100);
+
+                for (const p of game.pipes) p.update(dt, game.time);
+
+                const danger = clamp((brokenCount / 4) + (reactor.radiation / 100) * 0.8 + (reactor.timeLeft < 15 ? (15 - reactor.timeLeft) / 15 : 0), 0, 1.5);
+                game.geigerClock -= dt;
+                if (game.geigerClock <= 0) {
+                    playGeiger(danger);
+                    game.geigerClock = lerp(0.38, 0.055, clamp(danger / 1.5, 0, 1));
+                }
+
+                game.shake = lerp(game.shake, (reactor.timeLeft < 15 ? (15 - reactor.timeLeft) * 0.85 : 0) + brokenCount * 0.5, dt * 6);
+
+                updateParticles(dt);
+
+                if (reactor.timeLeft <= 0 || reactor.radiation >= 100) gameOver();
+                updateHud();
+            }
+
+            function updateParticles(dt) {
+                for (let i = game.particles.length - 1; i >= 0; i--) {
+                    const p = game.particles[i];
+                    p.life -= dt;
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    if (p.type === 'steam') {
+                        p.vx *= 0.98; p.vy -= 12 * dt;
+                    } else if (p.type === 'acid') {
+                        p.vy += 90 * dt;
+                    } else {
+                        p.vx *= 0.92; p.vy *= 0.92;
+                    }
+                    if (p.life <= 0) game.particles.splice(i, 1);
+                }
+            }
+
+            function renderWorld() {
+                // floor
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#10131d');
+                bg.addColorStop(1, '#06080d');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+
+                // industrial grid
+                ctx.save();
+                ctx.globalAlpha = 0.08;
+                ctx.strokeStyle = '#8da2c3';
+                ctx.lineWidth = 1;
+                for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+                for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+                ctx.restore();
+
+                // reactor warning pulse
+                if (reactor.timeLeft < 14) {
+                    const alpha = 0.06 + (Math.sin(performance.now() * 0.018) * 0.5 + 0.5) * 0.14;
+                    ctx.fillStyle = `rgba(255,30,40,${alpha})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
+
+                // reactor
+                const pulse = 1 + Math.sin(performance.now() * 0.01) * 0.04;
+                ctx.save();
+                ctx.translate(reactor.x, reactor.y);
+                ctx.scale(pulse, pulse);
+                const rg = ctx.createRadialGradient(0, 0, 20, 0, 0, 110);
+                rg.addColorStop(0, '#fffab8');
+                rg.addColorStop(0.3, '#ffd646');
+                rg.addColorStop(0.6, '#ff6a36');
+                rg.addColorStop(1, '#4f0d14');
+                ctx.fillStyle = rg;
+                ctx.beginPath(); ctx.arc(0, 0, 104, 0, Math.PI * 2); ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255,255,255,.18)';
+                ctx.lineWidth = 10;
+                ctx.beginPath(); ctx.arc(0, 0, 125, 0, Math.PI * 2); ctx.stroke();
+                ctx.restore();
+
+                // pipes
+                for (const p of game.pipes) p.draw();
+
+                // target highlight
+                if (game.targetPipe && input.repairHeld) {
+                    const t = game.targetPipe.tip;
+                    ctx.strokeStyle = 'rgba(255,255,255,.28)';
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y, 34 + Math.sin(performance.now() * 0.015) * 4, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // particles
+                for (const p of game.particles) {
+                    const a = clamp(p.life / p.maxLife, 0, 1);
+                    if (p.type === 'steam') {
+                        ctx.fillStyle = `rgba(220,240,255,${a * 0.35})`;
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 + (1 - a) * 0.8), 0, Math.PI * 2); ctx.fill();
+                    } else if (p.type === 'acid') {
+                        ctx.fillStyle = `rgba(109,255,154,${a * 0.42})`;
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+                    } else {
+                        ctx.fillStyle = `rgba(255,230,160,${a})`;
+                        ctx.fillRect(p.x, p.y, p.size, p.size);
+                    }
+                }
+
+                // player
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.facing + Math.PI / 2);
+                ctx.fillStyle = '#9fe8ff';
+                ctx.beginPath();
+                ctx.moveTo(0, -18);
+                ctx.lineTo(12, 15);
+                ctx.lineTo(-12, 15);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#eaffff';
+                ctx.beginPath(); ctx.arc(0, -6, 4.5, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+
+                // vignette
+                const vg = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 760);
+                vg.addColorStop(0, 'rgba(0,0,0,0)');
+                vg.addColorStop(1, 'rgba(0,0,0,.48)');
+                ctx.fillStyle = vg;
+                ctx.fillRect(0, 0, W, H);
+
+                if (game.state === 'over') {
+                    ctx.fillStyle = `rgba(255,30,40,${0.14 + game.flash * 0.35})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
+            }
+
+            function render() {
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                ctx.clearRect(0, 0, view.w, view.h);
+                ctx.fillStyle = '#06070b';
+                ctx.fillRect(0, 0, view.w, view.h);
+
+                const sx = (Math.random() - 0.5) * game.shake;
+                const sy = (Math.random() - 0.5) * game.shake;
+
+                ctx.save();
+                ctx.translate(view.ox + sx, view.oy + sy);
+                ctx.scale(view.scale, view.scale);
+                renderWorld();
+                ctx.restore();
+            }
+
+            function startOrRestart() {
+                if (game.state === 'intro' || game.state === 'over') resetGame();
+            }
+
+            addEventListener('keydown', e => {
+                if (e.code === 'KeyR') startOrRestart();
+                if (game.state === 'intro' && (e.code === 'Space' || e.code === 'Enter')) startOrRestart();
+            });
+            wrap.addEventListener('pointerdown', () => { if (game.state === 'intro' || game.state === 'over') startOrRestart(); });
+
+            showCenter('Çekirdek Erimesi', 'Başlamak için dokun. Borular bozuldukça süre daha hızlı akar.');
+            let last = performance.now();
+            function loop(now) {
+                const dt = Math.min(0.033, (now - last) / 1000);
+                last = now;
+                update(dt);
+                render();
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        })();
+    </script>
+</body>
+
+</html>

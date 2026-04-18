@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Kütle Çekim</title>
+    <style>
+        body { margin: 0; padding: 0; background: #020205; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #fff; user-select: none; touch-action: none; -webkit-touch-callout: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 20px; left: 20px; text-shadow: 0 0 10px #0ff; pointer-events: none; z-index: 10; }
+        #score { font-size: 32px; font-weight: bold; color: #0ff; transition: transform 0.1s; }
+        #gameover { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; z-index: 20; width: 90%; }
+        h1 { font-size: 48px; color: #f0f; text-shadow: 0 0 20px #f0f; margin-bottom: 20px; }
+        button { padding: 15px 30px; font-size: 20px; background: rgba(0,0,0,0.5); color: #0ff; border: 2px solid #0ff; border-radius: 5px; cursor: pointer; text-shadow: 0 0 5px #0ff; box-shadow: 0 0 10px #0ff inset, 0 0 10px #0ff; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
+        button:hover, button:active { background: rgba(0, 255, 255, 0.2); transform: scale(1.05); }
+        .help { color: #88f; font-size: 14px; margin-top: 10px; opacity: 0.8;}
+        
+        @media (max-width: 600px) {
+            h1 { font-size: 32px; }
+            #score { font-size: 24px; }
+            button { padding: 10px 20px; font-size: 16px; }
+            .help { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="score">Skor: 0</div>
+        <div class="help" id="helpText">Çekim merkezi oluşturmak için ekrana tıkla/basılı tut.</div>
+    </div>
+    <div id="gameover">
+        <h1 id="goTitle">SİMÜLASYON BAŞARISIZ</h1>
+        <button onclick="startGame()">YENİDEN BAŞLAT</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        let score = 0;
+        let isGameOver = true;
+        let shakeTime = 0;
+        let audioCtx;
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        
+        function initAudio() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+            
+            if (type === 'gravity') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'target') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.setValueAtTime(1200, now + 0.1);
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'crash') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+                gainNode.gain.setValueAtTime(0.8, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let ship = null, gravityWells = [], targets = [], particles = [], obstacles = [];
+
+        function startGame() {
+            initAudio();
+            document.getElementById('gameover').style.display = 'none';
+            document.getElementById('helpText').style.display = 'none';
+            score = 0;
+            isGameOver = false;
+            ship = { x: 100, y: height / 2, vx: 3, vy: 0, radius: 8, color: '#0ff' };
+            gravityWells = [];
+            targets = [];
+            particles = [];
+            obstacles = [];
+            spawnTarget();
+            for(let i=0; i<Math.max(3, Math.floor(width/200)); i++) spawnObstacle();
+            updateScore();
+            requestAnimationFrame(loop);
+        }
+
+        function createParticles(x, y, color, count, speed=10) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * speed,
+                    vy: (Math.random() - 0.5) * speed,
+                    life: 1, color: color
+                });
+            }
+        }
+
+        function spawnTarget() {
+            targets.push({ x: width - 200 + Math.random() * 100, y: Math.random() * (height - 100) + 50, radius: 15, color: '#0f0' });
+        }
+
+        function spawnObstacle() {
+            let ox = Math.random() * width * 0.6 + width * 0.2;
+            let oy = Math.random() * height;
+            // keep away from ship start
+            if(Math.hypot(ox - 100, oy - height/2) < 150) return spawnObstacle();
+            obstacles.push({ x: ox, y: oy, radius: Math.random() * 25 + 15, color: '#f00' });
+        }
+
+        ['mousedown', 'touchstart'].forEach(evt => 
+            canvas.addEventListener(evt, (e) => {
+                if(isGameOver) return;
+                initAudio();
+                isMouseDown = true;
+                let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                gravityWells.push({ x: clientX, y: clientY, mass: 2500, life: 1 });
+                playSound('gravity');
+            })
+        );
+        ['mousemove', 'touchmove'].forEach(evt => 
+            canvas.addEventListener(evt, (e) => {
+                mouseX = e.touches ? e.touches[0].clientX : e.clientX;
+                mouseY = e.touches ? e.touches[0].clientY : e.clientY;
+            })
+        );
+        ['mouseup', 'touchend'].forEach(evt => 
+            canvas.addEventListener(evt, () => isMouseDown = false)
+        );
+
+        function update() {
+            if(isGameOver) return;
+
+            // ship gravity pulling
+            gravityWells.forEach(well => {
+                let dx = well.x - ship.x;
+                let dy = well.y - ship.y;
+                let distsq = dx*dx + dy*dy;
+                let dist = Math.sqrt(distsq);
+                if(dist > 5) {
+                    let f = well.mass / distsq;
+                    ship.vx += (dx / dist) * f;
+                    ship.vy += (dy / dist) * f;
+                }
+                well.life -= 0.02;
+                well.mass *= 0.95;
+            });
+            gravityWells = gravityWells.filter(w => w.life > 0);
+
+            // basic drag/friction in space
+            ship.vx *= 0.995;
+            ship.vy *= 0.995;
+
+            // speed limit
+            let speed = Math.hypot(ship.vx, ship.vy);
+            if(speed > 12) {
+                ship.vx = (ship.vx/speed)*12;
+                ship.vy = (ship.vy/speed)*12;
+            }
+
+            ship.x += ship.vx;
+            ship.y += ship.vy;
+            
+            // engine trails
+            particles.push({x: ship.x, y: ship.y, vx: -ship.vx*0.1 + (Math.random()-0.5), vy: -ship.vy*0.1 + (Math.random()-0.5), life: 1, color: 'rgba(0, 255, 255, 0.4)'});
+
+            // check bounds bounds
+            if(ship.x < 0 || ship.x > width || ship.y < 0 || ship.y > height) {
+                gameOver();
+            }
+
+            // check obstacles
+            obstacles.forEach(obs => {
+                let dx = obs.x - ship.x;
+                let dy = obs.y - ship.y;
+                if(Math.sqrt(dx*dx + dy*dy) < obs.radius + ship.radius) gameOver();
+            });
+
+            // check targets
+            for(let i=targets.length-1; i>=0; i--) {
+                let t = targets[i];
+                let dx = t.x - ship.x;
+                let dy = t.y - ship.y;
+                if(Math.sqrt(dx*dx + dy*dy) < t.radius + ship.radius) {
+                    targets.splice(i, 1);
+                    playSound('target');
+                    createParticles(t.x, t.y, '#0f0', 30, 5);
+                    score += 150 + Math.floor(speed * 10);
+                    shakeTime = 10;
+                    spawnTarget();
+                    obstacles.forEach(o => { o.x += (Math.random()-0.5)*20; o.y += (Math.random()-0.5)*20; }); // slight shift
+                    updateScore();
+                }
+            }
+
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+            });
+            particles = particles.filter(p => p.life > 0);
+            
+            if(shakeTime > 0) shakeTime--;
+        }
+
+        function updateScore() {
+            document.getElementById('score').innerText = `Skor: ${score}`;
+            let s = document.getElementById('score');
+            s.style.transform = 'scale(1.2)';
+            setTimeout(() => s.style.transform = 'scale(1)', 100);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            playSound('crash');
+            createParticles(ship.x, ship.y, '#f00', 50, 15);
+            shakeTime = 30;
+            setTimeout(() => document.getElementById('gameover').style.display = 'block', 1000);
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(2, 2, 5, 0.25)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            if(shakeTime > 0) {
+                let mag = shakeTime * 0.8;
+                ctx.translate((Math.random()-0.5)*mag, (Math.random()-0.5)*mag);
+            }
+
+            ctx.globalCompositeOperation = 'lighter';
+
+            // draw wells
+            gravityWells.forEach(w => {
+                ctx.beginPath();
+                ctx.arc(w.x, w.y, w.life * 30, 0, Math.PI*2);
+                ctx.strokeStyle = `rgba(255, 0, 255, ${w.life})`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#f0f';
+            });
+
+            // target
+            targets.forEach(t => {
+                ctx.beginPath(); ctx.arc(t.x, t.y, t.radius + Math.sin(Date.now() / 150)*3, 0, Math.PI*2);
+                ctx.fillStyle = ctx.shadowColor = t.color;
+                ctx.shadowBlur = 30; ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+            });
+
+            // obstacles (black holes)
+            obstacles.forEach(o => {
+                ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI*2);
+                ctx.fillStyle = '#000'; ctx.fill();
+                ctx.strokeStyle = ctx.shadowColor = o.color;
+                ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.stroke();
+            });
+
+            // particles
+            particles.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.life*4), 0, Math.PI*2);
+                ctx.fillStyle = ctx.shadowColor = p.color;
+                ctx.shadowBlur = 10; ctx.fill();
+            });
+
+            // ship
+            if(!isGameOver && ship) {
+                ctx.beginPath(); ctx.arc(ship.x, ship.y, ship.radius, 0, Math.PI*2);
+                ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = ship.color;
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+        
+        // Initial Screen rendering
+        ctx.fillStyle = '#020205'; ctx.fillRect(0,0,width,height);
+        document.getElementById('gameover').style.display = 'block';
+        document.getElementById('goTitle').innerText = 'KÜTLE ÇEKİM';
+        document.getElementById('goTitle').style.color = '#0ff';
+        document.getElementById('goTitle').style.textShadow = '0 0 20px #0ff';
+        document.querySelector('#gameover button').innerText = 'BAŞLA';
+        loop();
+    </script>
+</body>
+</html>

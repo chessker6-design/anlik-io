@@ -1,0 +1,318 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sinyal Kulesi III: Son Yayın</title>
+  <style>
+    :root {
+      --bg0: #120710;
+      --bg1: #24101d;
+      --ink: #fff3ea;
+      --muted: #c9aeb8;
+      --rose: #ff5f8f;
+      --sun: #ffd15c;
+      --mint: #73ffc1;
+      --violet: #8fa6ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      background:
+        radial-gradient(circle at 50% 48%, rgba(255,209,92,.12), transparent 20%),
+        radial-gradient(circle at 15% 70%, rgba(115,255,193,.12), transparent 24%),
+        linear-gradient(145deg, var(--bg0), var(--bg1) 54%, #070610);
+      color: var(--ink);
+      font-family: 'Palatino Linotype', Georgia, serif;
+      touch-action: none;
+    }
+    canvas { width: 100vw; height: 100vh; display: block; }
+    .hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 3;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .panel {
+      background: rgba(16, 6, 13, .68);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      padding: 12px 14px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.28);
+    }
+    .brand { max-width: 380px; }
+    .tag { font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--sun); font-weight: 900; }
+    h1 { margin: 4px 0 0; line-height: .95; font-size: clamp(24px, 4.4vw, 54px); }
+    .stats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: end; }
+    .stat { min-width: 96px; text-align: center; }
+    .stat b { display: block; font-size: 23px; color: var(--mint); }
+    .stat span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 5;
+      background: radial-gradient(circle, rgba(20,7,16,.28), rgba(5,4,8,.92));
+    }
+    .card {
+      width: min(590px, calc(100vw - 30px));
+      border-radius: 30px;
+      padding: 30px;
+      background: linear-gradient(145deg, rgba(39,16,32,.94), rgba(8,6,13,.92));
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 35px 100px rgba(0,0,0,.55);
+    }
+    .card p { color: var(--muted); line-height: 1.55; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 20px;
+      color: #160910;
+      background: linear-gradient(135deg, var(--sun), var(--rose));
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 16px 40px rgba(255,95,143,.22);
+    }
+    .fireHint {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--muted);
+      background: rgba(16, 6, 13, .6);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 10px 14px;
+      border-radius: 999px;
+      z-index: 3;
+      pointer-events: none;
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      .hud { top: 10px; left: 10px; right: 10px; }
+      .panel { padding: 9px 10px; border-radius: 14px; }
+      .brand { max-width: 190px; }
+      .stats { max-width: 190px; }
+      .stat { min-width: 84px; }
+      .stat b { font-size: 18px; }
+      .fireHint { width: calc(100vw - 28px); text-align: center; bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <div class="panel brand">
+      <div class="tag">Sinyal Kulesi Serisi / Bölüm 3</div>
+      <h1>Son Yayın</h1>
+    </div>
+    <div class="stats">
+      <div class="panel stat"><b id="upload">0%</b><span>Yayın</span></div>
+      <div class="panel stat"><b id="integrity">100</b><span>Kule</span></div>
+      <div class="panel stat"><b id="energy">100</b><span>Enerji</span></div>
+      <div class="panel stat"><b id="score">0</b><span>Skor</span></div>
+    </div>
+  </div>
+  <div class="fireHint">Nişan almak için imleci sürükle. Ateş etmek için basılı tut veya boşluk kullan.</div>
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <div class="tag">Final Bölümü</div>
+      <h1>Kuleyi Yayında Tut</h1>
+      <p>Toplanan sinyal parçaları tek bir final yayınına dönüşüyor. Tarayıcı sürüleri merkeze ulaşmadan ışınla durdur. Yayın %100 olursa seri tamamlanır.</p>
+      <p><b>Kontrol:</b> Fare veya dokunmayla nişan al, basılı tutarak ışını çalıştır. Klavyede sol/sağ ile döndür, boşlukla ateş et.</p>
+      <button id="startBtn">Final Yayınını Başlat</button>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const uploadEl = document.getElementById('upload');
+    const integrityEl = document.getElementById('integrity');
+    const energyEl = document.getElementById('energy');
+    const scoreEl = document.getElementById('score');
+    const overlay = document.getElementById('overlay');
+    let w = 0, h = 0, cx = 0, cy = 0, radius = 0;
+    let running = false, last = 0, spawnTimer = 0, angle = -Math.PI / 2, firing = false, keyTurn = 0;
+    let upload = 0, integrity = 100, energy = 100, score = 0, wave = 1, shake = 0;
+    let enemies = [], sparks = [], rings = [], stars = [];
+
+    function resize() {
+      canvas.width = window.innerWidth * devicePixelRatio;
+      canvas.height = window.innerHeight * devicePixelRatio;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      w = window.innerWidth; h = window.innerHeight; cx = w / 2; cy = h / 2 + 24; radius = Math.min(w, h) * .13;
+      stars = Array.from({ length: 120 }, (_, i) => ({ x: (i * 97) % w, y: (i * 53) % h, r: .4 + (i % 4) * .35 }));
+    }
+    function reset() {
+      upload = 0; integrity = 100; energy = 100; score = 0; wave = 1; spawnTimer = .8; angle = -Math.PI / 2; firing = false; keyTurn = 0; shake = 0;
+      enemies = []; sparks = []; rings = [];
+      updateHud();
+    }
+    function start() {
+      resize(); reset(); running = true; overlay.style.display = 'none'; last = performance.now(); requestAnimationFrame(loop);
+    }
+    function loop(now) {
+      if (!running) return;
+      const dt = Math.min(.033, (now - last) / 1000); last = now;
+      update(dt); draw(); requestAnimationFrame(loop);
+    }
+    function update(dt) {
+      angle += keyTurn * dt * 3.1;
+      spawnTimer -= dt;
+      shake = Math.max(0, shake - dt * 14);
+      upload += dt * (2.1 + score / 9000);
+      wave = 1 + Math.floor(upload / 20);
+      if (spawnTimer <= 0) {
+        spawnEnemy();
+        spawnTimer = Math.max(.28, .92 - wave * .08 - Math.random() * .16);
+      }
+      enemies.forEach(e => {
+        const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy) || 1;
+        e.x += dx / d * e.speed * dt; e.y += dy / d * e.speed * dt; e.rot += dt * e.spin;
+        if (d < radius + e.r) {
+          e.dead = true; integrity -= e.damage; shake = 10; rings.push({ r: radius, life: .55, color: '#ff5f8f' });
+        }
+      });
+      if (firing && energy > 2) {
+        energy -= dt * 36;
+        fireBeam(dt);
+      } else {
+        energy += dt * 18;
+      }
+      energy = Math.max(0, Math.min(100, energy));
+      sparks.forEach(s => { s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt; });
+      rings.forEach(r => { r.r += dt * 180; r.life -= dt; });
+      sparks = sparks.filter(s => s.life > 0);
+      rings = rings.filter(r => r.life > 0);
+      enemies = enemies.filter(e => !e.dead);
+      if (integrity <= 0) end(false);
+      if (upload >= 100) end(true);
+      updateHud();
+    }
+    function spawnEnemy() {
+      const side = Math.floor(Math.random() * 4);
+      let x, y;
+      if (side === 0) { x = Math.random() * w; y = -60; }
+      if (side === 1) { x = w + 60; y = Math.random() * h; }
+      if (side === 2) { x = Math.random() * w; y = h + 60; }
+      if (side === 3) { x = -60; y = Math.random() * h; }
+      const heavy = Math.random() < Math.min(.36, .09 + wave * .04);
+      enemies.push({ x, y, r: heavy ? 24 : 16, hp: heavy ? 42 + wave * 4 : 22 + wave * 3, maxHp: heavy ? 42 + wave * 4 : 22 + wave * 3, speed: heavy ? 48 + wave * 5 : 72 + wave * 7, damage: heavy ? 16 : 9, rot: 0, spin: (Math.random() - .5) * 4, heavy });
+    }
+    function fireBeam(dt) {
+      const bx = Math.cos(angle), by = Math.sin(angle);
+      enemies.forEach(e => {
+        const px = e.x - cx, py = e.y - cy;
+        const along = px * bx + py * by;
+        if (along < 0) return;
+        const dist = Math.abs(px * by - py * bx);
+        if (dist < e.r + 13) {
+          e.hp -= dt * 90;
+          makeSpark(e.x, e.y, e.heavy ? '#ffd15c' : '#73ffc1', 2);
+          if (e.hp <= 0) {
+            e.dead = true; score += e.heavy ? 140 : 80; upload += e.heavy ? 1.2 : .7; energy = Math.min(100, energy + 5); rings.push({ r: 8, x: e.x, y: e.y, life: .45, color: '#73ffc1' });
+          }
+        }
+      });
+    }
+    function makeSpark(x, y, color, count) {
+      for (let i = 0; i < count; i++) sparks.push({ x, y, vx: (Math.random() - .5) * 190, vy: (Math.random() - .5) * 190, life: .22 + Math.random() * .3, color });
+    }
+    function updateHud() {
+      uploadEl.textContent = Math.min(100, Math.floor(upload)) + '%';
+      integrityEl.textContent = Math.max(0, Math.floor(integrity));
+      energyEl.textContent = Math.floor(energy);
+      scoreEl.textContent = score;
+    }
+    function end(win) {
+      running = false;
+      overlay.style.display = 'grid';
+      overlay.querySelector('.card').innerHTML = `<div class="tag">${win ? 'Seri tamamlandı' : 'Yayın düştü'}</div><h1>${win ? 'Son Sinyal Gönderildi' : 'Kule Susturuldu'}</h1><p>Yayın: <b>${Math.floor(Math.min(upload, 100))}%</b>, skor: <b>${score}</b>, kule bütünlüğü: <b>${Math.max(0, Math.floor(integrity))}</b>. ${win ? 'Sinyal Kulesi üçlemesi başarıyla tamamlandı.' : 'Işını kısa darbelerle kullanmak enerjiyi daha verimli tutar.'}</p><button id="againBtn">Yeniden Başlat</button>`;
+      document.getElementById('againBtn').addEventListener('click', start);
+    }
+    function draw() {
+      const sx = (Math.random() - .5) * shake, sy = (Math.random() - .5) * shake;
+      ctx.save(); ctx.translate(sx, sy); ctx.clearRect(-20, -20, w + 40, h + 40);
+      drawBackground(); drawRings(); drawEnemies(); drawBeam(); drawTower(); drawSparks(); ctx.restore();
+    }
+    function drawBackground() {
+      const g = ctx.createRadialGradient(cx, cy, 20, cx, cy, Math.max(w, h) * .72);
+      g.addColorStop(0, '#24101d'); g.addColorStop(.5, '#120710'); g.addColorStop(1, '#05040a'); ctx.fillStyle = g; ctx.fillRect(-20, -20, w + 40, h + 40);
+      ctx.fillStyle = 'rgba(255,243,234,.55)';
+      stars.forEach(s => { ctx.globalAlpha = .25 + Math.sin((performance.now() / 900) + s.x) * .18; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(255,209,92,.11)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 7; i++) { ctx.beginPath(); ctx.arc(cx, cy, radius + i * 58 + (upload % 10), 0, Math.PI * 2); ctx.stroke(); }
+    }
+    function drawTower() {
+      ctx.save(); ctx.translate(cx, cy);
+      const pulse = 1 + Math.sin(performance.now() / 180) * .035;
+      ctx.scale(pulse, pulse);
+      ctx.fillStyle = 'rgba(255,209,92,.16)'; ctx.beginPath(); ctx.arc(0, 0, radius * 1.45, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd15c'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#160910'; ctx.beginPath(); ctx.arc(0, 0, radius * .62, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff3ea'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -radius * .9); ctx.lineTo(radius * .74, radius * .45); ctx.lineTo(-radius * .74, radius * .45); ctx.closePath(); ctx.stroke();
+      ctx.rotate(angle); ctx.fillStyle = '#73ffc1'; ctx.fillRect(radius * .25, -5, radius * .95, 10); ctx.restore();
+    }
+    function drawBeam() {
+      if (!firing || energy <= 2) return;
+      const bx = Math.cos(angle), by = Math.sin(angle);
+      const g = ctx.createLinearGradient(cx, cy, cx + bx * Math.max(w, h), cy + by * Math.max(w, h));
+      g.addColorStop(0, 'rgba(115,255,193,.9)'); g.addColorStop(.45, 'rgba(143,166,255,.45)'); g.addColorStop(1, 'rgba(255,95,143,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = 22; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + bx * Math.max(w, h), cy + by * Math.max(w, h)); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.84)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + bx * Math.max(w, h), cy + by * Math.max(w, h)); ctx.stroke();
+    }
+    function drawEnemies() {
+      enemies.forEach(e => {
+        ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot);
+        ctx.fillStyle = e.heavy ? '#ff5f8f' : '#8fa6ff'; ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = i / 6 * Math.PI * 2;
+          const rr = i % 2 ? e.r * .62 : e.r;
+          const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(-e.r, e.r + 7, e.r * 2, 4);
+        ctx.fillStyle = '#73ffc1'; ctx.fillRect(-e.r, e.r + 7, e.r * 2 * (e.hp / e.maxHp), 4);
+        ctx.restore();
+      });
+    }
+    function drawRings() {
+      rings.forEach(r => {
+        ctx.globalAlpha = Math.max(0, r.life * 1.9); ctx.strokeStyle = r.color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(r.x || cx, r.y || cy, r.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      });
+    }
+    function drawSparks() {
+      sparks.forEach(s => { ctx.globalAlpha = Math.max(0, s.life * 2.3); ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, 3 + s.life * 7, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; });
+    }
+    function setAim(clientX, clientY) { angle = Math.atan2(clientY - cy, clientX - cx); }
+    window.addEventListener('resize', resize);
+    canvas.addEventListener('pointermove', e => setAim(e.clientX, e.clientY));
+    canvas.addEventListener('pointerdown', e => { setAim(e.clientX, e.clientY); firing = true; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointerup', () => firing = false);
+    canvas.addEventListener('pointercancel', () => firing = false);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keyTurn = -1;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keyTurn = 1;
+      if (e.code === 'Space') firing = true;
+    });
+    window.addEventListener('keyup', e => {
+      if (['ArrowLeft','ArrowRight','a','A','d','D'].includes(e.key)) keyTurn = 0;
+      if (e.code === 'Space') firing = false;
+    });
+    document.getElementById('startBtn').addEventListener('click', start);
+    resize(); draw();
+  </script>
+</body>
+</html>

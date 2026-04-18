@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kısa Devre - PCB Bulmacası</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050a05;
+            /* Koyu yeşil PCB arka planı */
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+            /* Mobilde kaydırmayı engelle */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #0f0;
+            text-shadow: 0 0 10px #0f0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1,
+        p {
+            margin: 5px 0;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 30px;
+            text-align: center;
+            text-shadow: 0 0 20px #0f0;
+            background: rgba(0, 20, 0, 0.8);
+            padding: 20px;
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            display: none;
+            z-index: 20;
+            cursor: pointer;
+        }
+
+        #btn-reset {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #0f0;
+            color: #0f0;
+            padding: 10px 20px;
+            font-family: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 0 10px #0f0;
+            border-radius: 5px;
+            z-index: 10;
+        }
+
+        #btn-reset:active {
+            background: rgba(0, 255, 0, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui">
+        <h1>KISA DEVRE</h1>
+        <p>Tüm pinleri bağla ve kartı doldur.</p>
+        <p>Bağlantılar: <span id="connDisp">0</span> / <span id="totalDisp">0</span></p>
+    </div>
+
+    <button id="btn-reset">↺ Devreyi Temizle</button>
+    <div id="message"></div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const connDisp = document.getElementById('connDisp');
+        const totalDisp = document.getElementById('totalDisp');
+        const messageBox = document.getElementById('message');
+        const btnReset = document.getElementById('btn-reset');
+
+        let width, height;
+        let cellSize, offsetX, offsetY;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            calculateGrid();
+        }
+        window.addEventListener('resize', resize);
+
+        // --- SES MOTORU (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function initAudio() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playTick() {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        function playConnect() {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+            osc.frequency.setValueAtTime(554, audioCtx.currentTime + 0.1); // C#5
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function playWin() {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+            osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+            osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+            osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.3); // C6
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+
+            // Reverb hissi için delay
+            let delay = audioCtx.createDelay();
+            delay.delayTime.value = 0.1;
+            let delayGain = audioCtx.createGain();
+            delayGain.gain.value = 0.3;
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.connect(delay);
+            delay.connect(delayGain);
+            delayGain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.6);
+        }
+
+        // --- OYUN MANTIĞI VE VERİLERİ ---
+        const colors = {
+            'R': '#ff0055', // Neon Kırmızı
+            'B': '#00f3ff', // Neon Mavi
+            'G': '#00ff66', // Neon Yeşil
+            'Y': '#ffeb3b', // Neon Sarı
+            'P': '#d500f9'  // Neon Mor
+        };
+
+        // 5x5 Seviye Tasarımı (0: boş, Harf: Pin)
+        const levelData = [
+            ['R', '0', '0', 'G', '0'],
+            ['0', '0', 'B', '0', '0'],
+            ['0', 'Y', '0', 'G', '0'],
+            ['0', 'B', '0', '0', '0'],
+            ['0', 'R', 'Y', '0', '0']
+        ];
+
+        const gridSize = 5;
+        let nodes = [];
+        let paths = {}; // Örn: {'R': [{x:0,y:0}, {x:1,y:0}...]}
+        let isDrawing = false;
+        let currentColor = null;
+        let gameState = 'playing';
+
+        function calculateGrid() {
+            let maxW = width * 0.9;
+            let maxH = height * 0.7;
+            cellSize = Math.min(maxW, maxH) / gridSize;
+            offsetX = (width - (cellSize * gridSize)) / 2;
+            offsetY = (height - (cellSize * gridSize)) / 2 + 30;
+        }
+
+        function initLevel() {
+            nodes = [];
+            paths = {};
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    let char = levelData[y][x];
+                    if (char !== '0') {
+                        nodes.push({ x: x, y: y, color: char });
+                        if (!paths[char]) paths[char] = [];
+                    }
+                }
+            }
+            totalDisp.innerText = Object.keys(paths).length;
+            gameState = 'playing';
+            messageBox.style.display = 'none';
+        }
+
+        // --- GİRDİ (INPUT) İŞLEMLERİ ---
+        function getGridPos(clientX, clientY) {
+            let x = clientX - offsetX;
+            let y = clientY - offsetY;
+            let gx = Math.floor(x / cellSize);
+            let gy = Math.floor(y / cellSize);
+            if (gx >= 0 && gx < gridSize && gy >= 0 && gy < gridSize) {
+                return { x: gx, y: gy };
+            }
+            return null;
+        }
+
+        function handlePointerDown(e) {
+            if (gameState !== 'playing') return;
+            initAudio();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let pos = getGridPos(clientX, clientY);
+
+            if (pos) {
+                // Tıklanan yer bir node mu?
+                let node = nodes.find(n => n.x === pos.x && n.y === pos.y);
+                if (node) {
+                    isDrawing = true;
+                    currentColor = node.color;
+                    paths[currentColor] = [pos]; // Yeni yol başlat
+                    playTick();
+                } else {
+                    // Node değilse, bir yolun ucu mu? (Geri alma mekanizması)
+                    for (let c in paths) {
+                        let path = paths[c];
+                        if (path.length > 0) {
+                            let last = path[path.length - 1];
+                            if (last.x === pos.x && last.y === pos.y) {
+                                isDrawing = true;
+                                currentColor = c;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!isDrawing || gameState !== 'playing') return;
+            e.preventDefault(); // Ekranın kaymasını engelle
+
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let pos = getGridPos(clientX, clientY);
+
+            if (pos) {
+                let path = paths[currentColor];
+                let lastPos = path[path.length - 1];
+
+                // Aynı hücredeysek hiçbir şey yapma
+                if (pos.x === lastPos.x && pos.y === lastPos.y) return;
+
+                // Çapraz gitmeyi engelle (sadece yatay ve dikey)
+                let dx = Math.abs(pos.x - lastPos.x);
+                let dy = Math.abs(pos.y - lastPos.y);
+                if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+
+                    // 1. Kural: Geri mi dönüyoruz? (Kendi yolumuzu silme)
+                    if (path.length > 1 && path[path.length - 2].x === pos.x && path[path.length - 2].y === pos.y) {
+                        path.pop();
+                        playTick();
+                        return;
+                    }
+
+                    // 2. Kural: Bu renk tamamlanmışsa ve uçta değilsek uzatma
+                    let isCompleted = isPathComplete(currentColor);
+                    if (isCompleted) return;
+
+                    // 3. Kural: Başka bir node'a mı çarpıyoruz?
+                    let hitNode = nodes.find(n => n.x === pos.x && n.y === pos.y);
+                    if (hitNode) {
+                        if (hitNode.color === currentColor) {
+                            // Hedefe ulaştık!
+                            path.push(pos);
+                            playConnect();
+                            checkWin();
+                        }
+                        return; // Başka renkteki node'un üstüne yazılamaz
+                    }
+
+                    // 4. Kural: Başka bir yol var mı? Varsa kesme
+                    for (let c in paths) {
+                        if (c !== currentColor) {
+                            let otherPath = paths[c];
+                            let hitIndex = otherPath.findIndex(p => p.x === pos.x && p.y === pos.y);
+                            if (hitIndex !== -1) {
+                                // Flow Free mekaniği: Başka yolun üstüne basarsan o yolu oradan keser
+                                paths[c] = otherPath.slice(0, hitIndex);
+                            }
+                        }
+                    }
+
+                    // Sorun yok, yolu ekle
+                    path.push(pos);
+                    playTick();
+                }
+            }
+        }
+
+        function handlePointerUp() {
+            isDrawing = false;
+        }
+
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+        canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+        window.addEventListener('touchend', handlePointerUp);
+
+        btnReset.addEventListener('click', () => {
+            initAudio();
+            initLevel();
+        });
+
+        messageBox.addEventListener('click', () => {
+            initLevel();
+        });
+
+        // --- KONTROLLER VE ÇİZİM ---
+        function isPathComplete(color) {
+            let path = paths[color];
+            if (!path || path.length < 2) return false;
+            let first = path[0];
+            let last = path[path.length - 1];
+
+            let nodeCount = 0;
+            if (nodes.find(n => n.x === first.x && n.y === first.y && n.color === color)) nodeCount++;
+            if (nodes.find(n => n.x === last.x && n.y === last.y && n.color === color)) nodeCount++;
+
+            return nodeCount === 2;
+        }
+
+        function checkWin() {
+            let completed = 0;
+            let totalPaths = Object.keys(paths).length;
+            let filledCells = 0;
+
+            for (let c in paths) {
+                if (isPathComplete(c)) completed++;
+                filledCells += paths[c].length;
+            }
+
+            connDisp.innerText = completed;
+
+            // Kazanma Şartı: Tüm pinler bağlı VE tüm ızgara dolu
+            if (completed === totalPaths && filledCells === gridSize * gridSize) {
+                gameState = 'win';
+                playWin();
+                messageBox.innerHTML = "SİSTEM DEVREDE!<br><span style='font-size:16px;color:#0f0;'>Yeniden Oynamak İçin Tıkla</span>";
+                messageBox.style.display = 'block';
+            }
+        }
+
+        function draw() {
+            // Arka planı temizle
+            ctx.fillStyle = '#050a05';
+            ctx.fillRect(0, 0, width, height);
+
+            // Izgarayı Çiz (PCB Yolları Arka Planı)
+            ctx.strokeStyle = '#0f2a0f';
+            ctx.lineWidth = 2;
+            for (let i = 0; i <= gridSize; i++) {
+                ctx.beginPath();
+                ctx.moveTo(offsetX + i * cellSize, offsetY);
+                ctx.lineTo(offsetX + i * cellSize, offsetY + gridSize * cellSize);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(offsetX, offsetY + i * cellSize);
+                ctx.lineTo(offsetX + gridSize * cellSize, offsetY + i * cellSize);
+                ctx.stroke();
+            }
+
+            // Yolları (Traces) Çiz
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            for (let c in paths) {
+                let path = paths[c];
+                if (path.length > 0) {
+                    let completed = isPathComplete(c);
+
+                    ctx.beginPath();
+                    ctx.moveTo(offsetX + path[0].x * cellSize + cellSize / 2, offsetY + path[0].y * cellSize + cellSize / 2);
+                    for (let i = 1; i < path.length; i++) {
+                        ctx.lineTo(offsetX + path[i].x * cellSize + cellSize / 2, offsetY + path[i].y * cellSize + cellSize / 2);
+                    }
+
+                    // Glow (Neon) Efekti
+                    ctx.strokeStyle = colors[c];
+                    ctx.lineWidth = cellSize * 0.3;
+                    ctx.shadowBlur = completed ? 20 : 10;
+                    ctx.shadowColor = colors[c];
+                    ctx.stroke();
+                    ctx.shadowBlur = 0; // Reset
+                }
+            }
+
+            // Enerji Dalgaları (Pulse) - Sadece tamamlanmış yollarda
+            let time = Date.now() / 300;
+            for (let c in paths) {
+                let path = paths[c];
+                if (isPathComplete(c) && path.length > 1) {
+                    let t = time % (path.length - 1);
+                    let idx = Math.floor(t);
+                    let frac = t - idx;
+
+                    let p1 = path[idx];
+                    let p2 = path[idx + 1];
+
+                    let px = p1.x + (p2.x - p1.x) * frac;
+                    let py = p1.y + (p2.y - p1.y) * frac;
+
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(offsetX + px * cellSize + cellSize / 2, offsetY + py * cellSize + cellSize / 2, cellSize * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            // Pinleri (Nodes) Çiz
+            nodes.forEach(node => {
+                let cx = offsetX + node.x * cellSize + cellSize / 2;
+                let cy = offsetY + node.y * cellSize + cellSize / 2;
+
+                ctx.fillStyle = '#050a05';
+                ctx.beginPath();
+                ctx.arc(cx, cy, cellSize * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = colors[node.color];
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = colors[node.color];
+                ctx.beginPath();
+                ctx.arc(cx, cy, cellSize * 0.25, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Merkezdeki beyaz lehim noktası
+                ctx.fillStyle = '#fff';
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx, cy, cellSize * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function gameLoop() {
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        resize();
+        initLevel();
+        gameLoop();
+    </script>
+</body>
+
+</html>

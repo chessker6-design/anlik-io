@@ -1,0 +1,483 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Zaman Catlagi</title>
+  <style>
+    :root {
+      --panel: rgba(12, 18, 34, 0.82);
+      --line: rgba(135, 219, 255, 0.35);
+      --text: #eaf4ff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 20% 20%, #101a33, #06080f 62%);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    .hud {
+      position: fixed;
+      top: calc(10px + env(safe-area-inset-top, 0px));
+      left: 10px;
+      right: 10px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text);
+      pointer-events: none;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      flex-wrap: wrap;
+      gap: 8px;
+      z-index: 2;
+    }
+    .pill {
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(2px);
+      text-shadow: 0 0 12px rgba(0,0,0,0.65);
+      min-width: 110px;
+      text-align: center;
+    }
+    .mid {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #fff;
+      pointer-events: none;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.7);
+      padding: 20px;
+      z-index: 3;
+    }
+    .title { font-size: clamp(28px, 5vw, 56px); font-weight: 900; letter-spacing: 0.08em; }
+    .hint { margin-top: 10px; white-space: pre-line; font-weight: 700; opacity: 0.95; }
+    .touch-help {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      display: none;
+      justify-content: center;
+      z-index: 2;
+      pointer-events: none;
+      color: #cfe6ff;
+      font-size: 13px;
+      opacity: 0.9;
+      text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    }
+    @media (max-width: 920px), (pointer: coarse) {
+      .touch-help { display: flex; }
+      .hint { font-size: clamp(13px, 3.6vw, 16px); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <div class="pill" id="score">SKOR: 0</div>
+    <div class="pill" id="combo">KOMBO: x1.0</div>
+    <div class="pill" id="timeState">ZAMAN: 1.00x</div>
+  </div>
+  <div class="mid" id="overlay">
+    <div>
+      <div class="title">ZAMAN CATLAGI</div>
+      <div class="hint">PC: WASD + mouse hareketi
+Mobil: ekranda parmagini surukleyerek hareket et
+Hareket ettikce zaman hizlanir
+Baslamak icin dokun veya bir tusa bas</div>
+    </div>
+  </div>
+  <div class="touch-help">Dokunup surukle: hareket + zaman hizlandirma</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const comboEl = document.getElementById('combo');
+  const timeStateEl = document.getElementById('timeState');
+  const overlay = document.getElementById('overlay');
+
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  const input = { up: false, down: false, left: false, right: false };
+  const touchMove = { active: false, id: -1, x: 0, y: 0 };
+  let audioCtx = null;
+  let ambientOsc = null;
+  let ambientGain = null;
+  let tickTimer = 0;
+  let beatTimer = 0;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      ambientOsc = audioCtx.createOscillator();
+      ambientGain = audioCtx.createGain();
+      ambientOsc.type = 'triangle';
+      ambientOsc.frequency.value = 42;
+      ambientGain.gain.value = 0.0001;
+      ambientOsc.connect(ambientGain).connect(audioCtx.destination);
+      ambientOsc.start();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playTick() {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(980, t);
+    osc.frequency.exponentialRampToValueAtTime(680, t + 0.04);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.05, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }
+
+  function playBeat() {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(65, t + 0.11);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+
+  function blend(c1, c2, t) {
+    return [
+      c1[0] + (c2[0] - c1[0]) * t,
+      c1[1] + (c2[1] - c1[1]) * t,
+      c1[2] + (c2[2] - c1[2]) * t
+    ];
+  }
+  const rgb = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+
+  const state = {
+    running: false,
+    gameOver: false,
+    player: { x: innerWidth * 0.5, y: innerHeight * 0.5, r: 12, speed: 330 },
+    bullets: [],
+    score: 0,
+    bonus: 0,
+    combo: 1,
+    comboDecay: 0,
+    timeScale: 0.08,
+    mousePower: 0,
+    spawnTimer: 0,
+    mouseX: innerWidth * 0.5,
+    mouseY: innerHeight * 0.5,
+    aliveTime: 0
+  };
+
+  function reset() {
+    state.running = false;
+    state.gameOver = false;
+    state.player.x = innerWidth * 0.5;
+    state.player.y = innerHeight * 0.5;
+    state.bullets.length = 0;
+    state.score = 0;
+    state.bonus = 0;
+    state.combo = 1;
+    state.comboDecay = 0;
+    state.timeScale = 0.08;
+    state.mousePower = 0;
+    state.spawnTimer = 0.4;
+    state.aliveTime = 0;
+    touchMove.active = false;
+    touchMove.id = -1;
+  }
+  reset();
+
+  function start() {
+    ensureAudio();
+    reset();
+    state.running = true;
+    overlay.style.display = 'none';
+  }
+
+  function endGame() {
+    state.running = false;
+    state.gameOver = true;
+    overlay.style.display = 'grid';
+    overlay.querySelector('.hint').textContent = `Skor: ${Math.floor(state.score)}\nTekrar baslamak icin dokun veya bir tusa bas`;
+  }
+
+  function spawnBullet() {
+    const side = (Math.random() * 4) | 0;
+    let x = 0, y = 0;
+    if (side === 0) { x = -20; y = Math.random() * innerHeight; }
+    if (side === 1) { x = innerWidth + 20; y = Math.random() * innerHeight; }
+    if (side === 2) { x = Math.random() * innerWidth; y = -20; }
+    if (side === 3) { x = Math.random() * innerWidth; y = innerHeight + 20; }
+
+    const px = state.player.x + (Math.random() - 0.5) * 80;
+    const py = state.player.y + (Math.random() - 0.5) * 80;
+    const dx = px - x;
+    const dy = py - y;
+    const mag = Math.hypot(dx, dy) || 1;
+    const speed = 180 + Math.random() * 140;
+
+    state.bullets.push({ x, y, vx: (dx / mag) * speed, vy: (dy / mag) * speed, r: 7, trail: [], grazed: false });
+  }
+
+  function key(value, flag) {
+    if (value === 'ArrowUp' || value === 'KeyW') input.up = flag;
+    if (value === 'ArrowDown' || value === 'KeyS') input.down = flag;
+    if (value === 'ArrowLeft' || value === 'KeyA') input.left = flag;
+    if (value === 'ArrowRight' || value === 'KeyD') input.right = flag;
+  }
+  addEventListener('keydown', (e) => {
+    if (!state.running) start();
+    key(e.code, true);
+  });
+  addEventListener('keyup', (e) => key(e.code, false));
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    ensureAudio();
+    if (!state.running) {
+      start();
+      return;
+    }
+    if (e.pointerType !== 'mouse' && !touchMove.active) {
+      touchMove.active = true;
+      touchMove.id = e.pointerId;
+      touchMove.x = e.clientX;
+      touchMove.y = e.clientY;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const d = Math.hypot(e.clientX - state.mouseX, e.clientY - state.mouseY);
+    state.mousePower = Math.min(1, state.mousePower + d / 220);
+    state.mouseX = e.clientX;
+    state.mouseY = e.clientY;
+
+    if (touchMove.active && e.pointerId === touchMove.id) {
+      touchMove.x = e.clientX;
+      touchMove.y = e.clientY;
+    }
+  });
+
+  function endTouch(e) {
+    if (touchMove.active && e.pointerId === touchMove.id) {
+      touchMove.active = false;
+      touchMove.id = -1;
+    }
+  }
+  canvas.addEventListener('pointerup', endTouch);
+  canvas.addEventListener('pointercancel', endTouch);
+
+  function updateAudio(dt) {
+    if (!audioCtx || !ambientGain || !ambientOsc) return;
+    const slowAmount = 1 - ((state.timeScale - 0.08) / 0.92);
+    ambientGain.gain.value = 0.02 + slowAmount * 0.13;
+    ambientOsc.frequency.value = 42 - slowAmount * 16;
+
+    tickTimer -= dt;
+    beatTimer -= dt;
+
+    if (state.timeScale > 0.6) {
+      if (tickTimer <= 0) {
+        playTick();
+        tickTimer = 0.48;
+      }
+    } else {
+      const pace = 0.72 - slowAmount * 0.35;
+      if (beatTimer <= 0) {
+        playBeat();
+        beatTimer = Math.max(0.24, pace);
+      }
+    }
+  }
+
+  function update(dt) {
+    if (!state.running) return;
+
+    const p = state.player;
+    let mx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    let my = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+
+    if (touchMove.active) {
+      const tx = touchMove.x - p.x;
+      const ty = touchMove.y - p.y;
+      const d = Math.hypot(tx, ty);
+      if (d > 8) {
+        mx += tx / d;
+        my += ty / d;
+      }
+      state.mousePower = Math.min(1, state.mousePower + dt * 2.3);
+    }
+
+    const moving = Math.abs(mx) > 0.01 || Math.abs(my) > 0.01;
+    if (moving) {
+      const m = Math.hypot(mx, my) || 1;
+      mx /= m;
+      my /= m;
+      p.x += mx * p.speed * dt;
+      p.y += my * p.speed * dt;
+    }
+    p.x = Math.max(p.r, Math.min(innerWidth - p.r, p.x));
+    p.y = Math.max(p.r, Math.min(innerHeight - p.r, p.y));
+
+    state.mousePower = Math.max(0, state.mousePower - dt * 2.6);
+    const movePower = moving ? 1 : 0;
+    const activity = Math.max(movePower * 0.95, state.mousePower);
+    const targetScale = 0.08 + activity * 0.92;
+    state.timeScale += (targetScale - state.timeScale) * Math.min(1, dt * 8);
+
+    const scaledDt = dt * state.timeScale;
+    state.aliveTime += dt;
+    state.score += dt * 25;
+
+    state.spawnTimer -= scaledDt;
+    if (state.spawnTimer <= 0) {
+      spawnBullet();
+      const base = Math.max(0.12, 0.62 - state.aliveTime * 0.01);
+      state.spawnTimer = base + Math.random() * 0.32;
+    }
+
+    const hitR = p.r + 6;
+    const grazeR = p.r + 24;
+
+    for (let i = state.bullets.length - 1; i >= 0; i--) {
+      const b = state.bullets[i];
+      b.x += b.vx * scaledDt;
+      b.y += b.vy * scaledDt;
+      b.trail.push({ x: b.x, y: b.y, life: 0.34 });
+      if (b.trail.length > 15) b.trail.shift();
+      for (let j = b.trail.length - 1; j >= 0; j--) {
+        b.trail[j].life -= scaledDt;
+        if (b.trail[j].life <= 0) b.trail.splice(j, 1);
+      }
+
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      if (d < hitR) {
+        endGame();
+        return;
+      }
+      if (!b.grazed && d < grazeR) {
+        b.grazed = true;
+        state.combo = Math.min(6, state.combo + 0.25);
+        state.comboDecay = 1.4;
+        state.bonus += 15 * state.combo;
+      }
+
+      if (b.x < -60 || b.x > innerWidth + 60 || b.y < -60 || b.y > innerHeight + 60) state.bullets.splice(i, 1);
+    }
+
+    if (state.comboDecay > 0) state.comboDecay -= dt;
+    else state.combo = Math.max(1, state.combo - dt * 0.4);
+
+    state.score += state.bonus * dt * 0.06;
+    updateAudio(dt);
+
+    scoreEl.textContent = 'SKOR: ' + Math.floor(state.score + state.bonus);
+    comboEl.textContent = 'KOMBO: x' + state.combo.toFixed(1);
+    timeStateEl.textContent = 'ZAMAN: ' + state.timeScale.toFixed(2) + 'x';
+  }
+
+  function draw() {
+    const vivid = (state.timeScale - 0.08) / 0.92;
+    const t = Math.max(0, Math.min(1, vivid));
+
+    const bg = blend([20, 22, 28], [10, 18, 34], t);
+    const grid = blend([96, 100, 110], [100, 185, 255], t);
+    const playerC = blend([210, 210, 210], [125, 255, 234], t);
+    const bA = blend([170, 170, 170], [255, 80, 110], t);
+    const bB = blend([170, 170, 170], [90, 220, 255], t);
+
+    ctx.fillStyle = rgb(bg);
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+    ctx.globalAlpha = 0.35;
+    const step = innerWidth < 620 ? 34 : 48;
+    for (let x = 0; x < innerWidth; x += step) {
+      ctx.strokeStyle = rgb(grid);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, innerHeight);
+      ctx.stroke();
+    }
+    for (let y = 0; y < innerHeight; y += step) {
+      ctx.strokeStyle = rgb(grid);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(innerWidth, y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    for (let i = 0; i < state.bullets.length; i++) {
+      const b = state.bullets[i];
+      for (let j = 0; j < b.trail.length; j++) {
+        const tr = b.trail[j];
+        ctx.globalAlpha = Math.max(0, tr.life / 0.34) * 0.65;
+        ctx.fillStyle = j % 2 === 0 ? rgb(bA) : rgb(bB);
+        ctx.beginPath();
+        ctx.arc(tr.x, tr.y, Math.max(1.5, b.r - 2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = i % 2 === 0 ? rgb(bA) : rgb(bB);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = rgb(playerC);
+    ctx.beginPath();
+    ctx.arc(state.player.x, state.player.y, state.player.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (!state.running && state.gameOver) {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, innerWidth, innerHeight);
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

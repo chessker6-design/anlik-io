@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Proje TARTARUS - Bölüm 2: Derin Karanlık</title>
+    <style>
+        :root { --main-bg: #030a05; --primary: #0f3; --text-dim: #0a0; --danger: #f03; }
+        body { margin: 0; padding: 0; background: var(--main-bg); color: var(--primary); font-family: 'Courier New', Courier, monospace; overflow: hidden; user-select: none; touch-action: none; -webkit-touch-callout: none; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;}
+        
+        .screen { position: absolute; top:0; left:0; width: 100%; height: 100%; display: none; flex-direction: column; box-sizing: border-box; padding: 20px;}
+        .active { display: flex; }
+        
+        /* Menu */
+        #menu { justify-content: center; align-items: center; text-align: center; background: radial-gradient(circle, #0a1c10, var(--main-bg)); }
+        h1 { font-size: 8vw; margin-bottom: 5px; text-shadow: 0 0 15px var(--primary); }
+        h2 { font-size: 4vw; color: var(--text-dim); margin-bottom: 40px; }
+        .btn { padding: 15px 40px; margin: 10px; font-size: 24px; font-family: 'Courier New', Courier, monospace; font-weight: bold; background: transparent; color: var(--primary); border: 2px solid var(--primary); border-radius: 4px; cursor: pointer; transition: 0.3s; text-shadow: 0 0 5px var(--primary); box-shadow: 0 0 10px var(--primary) inset; -webkit-tap-highlight-color: transparent;}
+        .btn:hover, .btn:active { background: rgba(0, 255, 51, 0.2); transform: scale(1.05); }
+
+        /* Story */
+        #story { justify-content: center; align-items: center; cursor: pointer; }
+        .story-box { width: 90%; max-width: 600px; min-height: 200px; border: 1px solid var(--text-dim); padding: 20px; box-shadow: 0 0 15px rgba(0,255,51,0.1) inset; position: relative; background: rgba(0,0,0,0.5); }
+        .typewriter { font-size: 22px; line-height: 1.5; text-shadow: 0 0 3px var(--primary); white-space: pre-wrap;}
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        .tap-indicator { position: absolute; bottom: 10px; right: 20px; font-size: 14px; opacity: 0.5; }
+
+        /* Game */
+        #game { justify-content: flex-start; align-items: center; }
+        .header { text-align: center; margin-bottom: 10px; flex-shrink: 0;}
+        .header p { margin: 5px; font-size: 16px; color: var(--text-dim); }
+        canvas { border: 2px solid var(--text-dim); border-radius: 50%; background: #000501; box-shadow: 0 0 30px rgba(0, 255, 51, 0.3); max-width: 100%; max-height: 70vh; aspect-ratio: 1/1; cursor: crosshair; }
+        
+        .scanline { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 100; opacity: 0.6; }
+
+        @media(max-width: 600px) {
+            h1 { font-size: 10vw;}
+            h2 { font-size: 6vw;}
+            .typewriter { font-size: 18px; }
+            .btn { font-size: 20px; padding: 12px 30px;}
+        }
+    </style>
+</head>
+<body>
+    <div class="scanline"></div>
+
+    <div id="menu" class="screen active">
+        <h1>PROJE TARTARUS</h1>
+        <h2>Bölüm 2 / Derin Karanlık</h2>
+        <button class="btn" onclick="startGame()">ASANSÖRÜ ÇALIŞTIR</button>
+    </div>
+
+    <div id="story" class="screen" onclick="nextStory()">
+        <div class="story-box">
+            <div id="storyText" class="typewriter"></div><span class="blink">_</span>
+            <div class="tap-indicator">Devam etmek için dokun</div>
+        </div>
+    </div>
+
+    <div id="game" class="screen">
+        <div class="header">
+            <h1 id="radarTitle" style="font-size:28px; margin-top:0;">TAKTİK RADAR</h1>
+            <p>Çekirdek Odası (Sarı) konumuna ulaşın.</p>
+            <p>Hareket etmek için dokunun. Devriyelere (Kırmızı) EYLEMEYİN.</p>
+        </div>
+        <canvas id="c"></canvas>
+    </div>
+
+    <script>
+        const storyLines = [
+            `> Asansör sarsılarak durdu. Yerin 500 metre altındasınız.`,
+            `> Terminal: "DİKKAT. YETKİSİZ GİRİŞ TESPİT EDİLDİ."`,
+            `> "Ben C.O.R.E. Tartarus Ana Yapay Zekası. Tesis karantina altındadır."`,
+            `> "Güvenlik protokolü İHLAL EDİLDİ. Üst katmanlara çıkılması yasaktır."`,
+            `> Etraf zifiri karanlık. Bilek bilgisayarınızın radar modülünü açıyorsunuz.`,
+            `> Ekranda devriye gezen güvenlik dronlarının sinyallerini görüyorsunuz.`,
+            `> Çekirdek odasına görünmeden ulaşmalısınız. Radar sisteminiz kırmızı lekelerle dolu...`
+        ];
+
+        const outLines = [
+            `> ÇEKİRDEK ODASINA ULAŞILDI.`,
+            `> Laboratuvarın panjur kapakları açılırken devasa bir server odası aydınlanıyor.`,
+            `> C.O.R.E: "Buraya gelmemeliydin. Siz insanlar çok meraklısınız."`,
+            `> Camların arkasında uyuyan devasa formları fark ediyorsunuz. Virüs her yeri sarmış. \n\n(Bölüm 2 Sonu. Bölüm 3: Sistem Çöküşü oyununa geçebilirsiniz.)`
+        ];
+
+        let currentStoryObj = null;
+        let storyIndex = 0;
+        let isTyping = false;
+        let actx;
+
+        function initAudio() {
+            if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+            if(actx.state === 'suspended') actx.resume();
+        }
+
+        function beep(freq = 600, type = 'square', dur = 0.05, vol = 0.1) {
+            if(!actx) return;
+            let o = actx.createOscillator(); let g = actx.createGain();
+            o.type = type; o.frequency.value = freq;
+            g.gain.setValueAtTime(vol, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
+            o.connect(g).connect(actx.destination);
+            o.start(); o.stop(actx.currentTime + dur);
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function startGame() {
+            initAudio();
+            showScreen('story');
+            currentStoryObj = storyLines;
+            storyIndex = 0;
+            typeStory();
+        }
+
+        function nextStory() {
+            if(isTyping) {
+                document.getElementById('storyText').innerText = currentStoryObj[storyIndex];
+                isTyping = false;
+                return;
+            }
+            storyIndex++;
+            if(storyIndex < currentStoryObj.length) {
+                typeStory();
+            } else {
+                if(currentStoryObj === storyLines) {
+                    startPuzzle();
+                } else {
+                    showScreen('menu'); // or external link
+                }
+            }
+        }
+
+        async function typeStory() {
+            isTyping = true;
+            let text = currentStoryObj[storyIndex];
+            let el = document.getElementById('storyText');
+            el.innerText = "";
+            for(let i=0; i<text.length; i++) {
+                if(!isTyping) break;
+                el.innerText += text[i];
+                if(i % 3 === 0) beep(500 + Math.random()*150, 'sawtooth', 0.02, 0.02);
+                await new Promise(r => setTimeout(r, 20 + Math.random()*30));
+            }
+            isTyping = false;
+        }
+
+        // ---------- GAME LOGIC ----------
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let dim = 0, isPlaying = false, radarAngle = 0;
+        
+        let player = {x: 0, y: 0, tx: 0, ty: 0, rad: 8, speed: 2};
+        let target = {x: 0, y: 0, rad: 15};
+        let enemies = [];
+        let particles = [];
+
+        function startPuzzle() {
+            showScreen('game');
+            dim = Math.min(window.innerWidth*0.9, window.innerHeight*0.6, 600);
+            c.width = dim; c.height = dim;
+            
+            initLevel();
+            isPlaying = true;
+            requestAnimationFrame(loop);
+        }
+
+        function initLevel() {
+            player.x = dim*0.15; player.y = dim*0.85;
+            player.tx = player.x; player.ty = player.y;
+            target.x = dim*0.85; target.y = dim*0.15;
+            
+            enemies = [
+                {x: dim*0.5, y: dim*0.2, p1: {x: dim*0.2, y: dim*0.2}, p2: {x: dim*0.8, y: dim*0.2}, speed: 1.5, toP2: true, rad: 12 },
+                {x: dim*0.5, y: dim*0.5, p1: {x: dim*0.5, y: dim*0.2}, p2: {x: dim*0.5, y: dim*0.8}, speed: 2, toP2: true, rad: 12 },
+                {x: dim*0.3, y: dim*0.8, p1: {x: dim*0.1, y: dim*0.8}, p2: {x: dim*0.8, y: dim*0.5}, speed: 1.2, toP2: true, rad: 12 },
+                {x: dim*0.8, y: dim*0.8, p1: {x: dim*0.8, y: dim*0.8}, p2: {x: dim*0.2, y: dim*0.5}, speed: 1.8, toP2: false, rad: 12 }
+            ];
+            particles = [];
+            document.getElementById('radarTitle').innerText = "TAKTİK RADAR";
+            document.getElementById('radarTitle').style.color = 'var(--primary)';
+        }
+
+        function moveEntity(ent, dt=1) {
+            let dx = ent.p2.x - ent.p1.x;
+            let dy = ent.p2.y - ent.p1.y;
+            let dist = Math.hypot(dx, dy);
+            let dirX = dx / dist; let dirY = dy / dist;
+            
+            if(ent.toP2) {
+                ent.x += dirX * ent.speed; ent.y += dirY * ent.speed;
+                if(Math.hypot(ent.x - ent.p2.x, ent.y - ent.p2.y) < ent.speed) ent.toP2 = false;
+            } else {
+                ent.x -= dirX * ent.speed; ent.y -= dirY * ent.speed;
+                if(Math.hypot(ent.x - ent.p1.x, ent.y - ent.p1.y) < ent.speed) ent.toP2 = true;
+            }
+        }
+
+        c.addEventListener('mousedown', setTarget);
+        c.addEventListener('touchstart', (e)=> { e.preventDefault(); setTarget({clientX: e.touches[0].clientX, clientY: e.touches[0].clientY}); }, {passive:false});
+
+        function setTarget(e) {
+            if(!isPlaying) return;
+            const rect = c.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            let cX = dim/2, cY = dim/2;
+            if(Math.hypot(x-cX, y-cY) < dim/2 - 5) {
+                player.tx = x; player.ty = y;
+                beep(800, 'sine', 0.05, 0.05);
+                particles.push({x: x, y: y, rad: 1, maxRad: 20, life: 1});
+            }
+        }
+
+        function die() {
+            isPlaying = false;
+            beep(150, 'sawtooth', 0.5, 0.3);
+            for(let i=0; i<30; i++) particles.push({x: player.x, y: player.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1});
+            document.getElementById('radarTitle').innerText = "SİNYAL KAYBEDİLDİ";
+            document.getElementById('radarTitle').style.color = 'var(--danger)';
+            setTimeout(() => {
+                initLevel();
+                isPlaying = true;
+            }, 2000);
+        }
+
+        function wined() {
+            isPlaying = false;
+            beep(800, 'square', 0.1, 0.2);
+            setTimeout(()=>beep(1200, 'square', 0.4, 0.2), 150);
+            for(let i=0; i<50; i++) particles.push({x: player.x, y: player.y, vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15, life: 1, isGreen: true});
+            setTimeout(() => {
+                showScreen('story');
+                currentStoryObj = outLines;
+                storyIndex = 0;
+                typeStory();
+            }, 2000);
+        }
+
+        function loop() {
+            if(isPlaying) {
+                radarAngle += 0.05;
+
+                // Move player
+                let px = player.tx - player.x, py = player.ty - player.y;
+                let pdist = Math.hypot(px, py);
+                if(pdist > player.speed) {
+                    player.x += (px/pdist)*player.speed;
+                    player.y += (py/pdist)*player.speed;
+                }
+
+                // Move enemies
+                enemies.forEach(e => {
+                    moveEntity(e);
+                    if(Math.hypot(player.x - e.x, player.y - e.y) < player.rad + e.rad) die();
+                });
+
+                // Check Win
+                if(Math.hypot(player.x - target.x, player.y - target.y) < player.rad + target.rad) wined();
+            }
+
+            // Draw
+            ctx.fillStyle = 'rgba(0, 5, 1, 0.2)'; // fade effect
+            ctx.fillRect(0,0,dim,dim);
+
+            ctx.save();
+            ctx.beginPath(); ctx.arc(dim/2, dim/2, dim/2, 0, Math.PI*2); ctx.clip();
+
+            // Radar grid
+            ctx.strokeStyle = '#05220a'; ctx.lineWidth = 1;
+            for(let i=1; i<5; i++) {
+                ctx.beginPath(); ctx.arc(dim/2, dim/2, (dim/2)*(i/4), 0, Math.PI*2); ctx.stroke();
+            }
+            ctx.beginPath(); ctx.moveTo(dim/2, 0); ctx.lineTo(dim/2, dim); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, dim/2); ctx.lineTo(dim, dim/2); ctx.stroke();
+
+            // Target
+            ctx.beginPath(); ctx.arc(target.x, target.y, target.rad + Math.sin(Date.now()/200)*3, 0, Math.PI*2);
+            ctx.fillStyle = '#ff0'; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0'; ctx.fill();
+
+            // Particles
+            particles.forEach(p => {
+                if(p.maxRad) {
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.rad, 0, Math.PI*2);
+                    ctx.strokeStyle = `rgba(0, 255, 0, ${p.life})`; ctx.stroke();
+                    p.rad += 1; p.life -= 0.05;
+                } else {
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.life*4, 0, Math.PI*2);
+                    ctx.fillStyle = p.isGreen ? '#0f3' : '#f03'; ctx.fill();
+                    p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+                }
+            });
+            particles = particles.filter(p => p.life > 0);
+
+            if(isPlaying) {
+                // Enemies
+                enemies.forEach(e => {
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.rad, 0, Math.PI*2);
+                    ctx.fillStyle = '#f03'; ctx.shadowBlur = 15; ctx.shadowColor = '#f03'; ctx.fill();
+                    // Optional: Draw path faintly
+                    ctx.beginPath(); ctx.moveTo(e.p1.x, e.p1.y); ctx.lineTo(e.p2.x, e.p2.y);
+                    ctx.strokeStyle = 'rgba(255,0,0,0.1)'; ctx.stroke();
+                });
+
+                // Player
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.rad, 0, Math.PI*2);
+                ctx.fillStyle = '#0f3'; ctx.shadowBlur = 15; ctx.shadowColor = '#0f3'; ctx.fill();
+
+                // Player Target Line
+                if(Math.hypot(player.tx - player.x, player.ty - player.y) > 5) {
+                    ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(player.tx, player.ty);
+                    ctx.strokeStyle = 'rgba(0,255,51,0.3)'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+                }
+            }
+
+            // Radar sweep
+            ctx.translate(dim/2, dim/2);
+            ctx.rotate(radarAngle);
+            ctx.beginPath(); ctx.moveTo(0,0);
+            ctx.arc(0, 0, dim/2, 0, 0.4);
+            ctx.closePath();
+            let grad = ctx.createLinearGradient(0,0,dim/2,0);
+            grad.addColorStop(0, 'rgba(0,255,51,0)'); grad.addColorStop(1, 'rgba(0,255,51,0.2)');
+            ctx.fillStyle = grad; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(dim/2, 0);
+            ctx.strokeStyle = 'rgba(0,255,51,0.5)'; ctx.stroke();
+
+            ctx.restore();
+            
+            // Re-call loop if active or dying particles exist
+            if(isPlaying || particles.length > 0) requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', () => { if(document.getElementById('game').classList.contains('active')) initLevel(); });
+    </script>
+</body>
+</html>

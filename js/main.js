@@ -115,6 +115,7 @@ async function loadGames() {
                 title: game.title || game.isim || "Bilinmeyen Oyun",
                 category: game.category || game.kategori || "Genel",
                 image: game.image || game.resim || game.cover || `https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&h=500&fit=crop&q=80`,
+                url: game.url || null
             };
         });
 
@@ -142,7 +143,7 @@ function renderGames(games) {
     const fragment = document.createDocumentFragment();
 
     games.forEach((game, index) => {
-        const gameUrl = `./games/${game.id}/game.html`;
+        const gameUrl = game.url ? game.url : `./games/${game.id}/game.html`;
         const color = getCategoryColor(game.category);
         
         const card = document.createElement("a");

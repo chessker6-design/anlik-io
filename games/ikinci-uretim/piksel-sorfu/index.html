@@ -1,0 +1,508 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Piksel Sorfu</title>
+  <style>
+    :root {
+      --bg: #0a0f1d;
+      --panel: #111a33;
+      --text: #d8e7ff;
+      --accent: #69ffcb;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05070e;
+      overflow: hidden;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+    #game { width: 100vw; height: 100vh; display: block; image-rendering: pixelated; touch-action: none; }
+    .hud {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+      z-index: 2;
+      flex-wrap: wrap;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(20, 35, 74, 0.9), rgba(11, 19, 39, 0.85));
+      border: 1px solid rgba(105, 255, 203, 0.25);
+      border-radius: 12px;
+      padding: 8px 12px;
+      backdrop-filter: blur(3px);
+    }
+    .center {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      color: #ffffff;
+      text-align: center;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+      z-index: 3;
+      padding: 20px;
+    }
+    .title { font-size: clamp(28px, 5vw, 52px); margin-bottom: 12px; }
+    .hint { font-size: clamp(14px, 2vw, 18px); opacity: 0.9; white-space: pre-line; }
+    .perfect {
+      position: fixed;
+      left: 50%;
+      top: 20%;
+      transform: translate(-50%, -50%) scale(0.8);
+      color: #ffe66d;
+      font-weight: 900;
+      font-size: clamp(26px, 4vw, 48px);
+      letter-spacing: 0.08em;
+      opacity: 0;
+      text-shadow: 0 0 20px rgba(255, 230, 109, 0.7);
+      transition: opacity 120ms linear, transform 120ms ease-out;
+      pointer-events: none;
+      z-index: 4;
+    }
+    .perfect.show { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+    .mobile-controls {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      display: none;
+      gap: 12px;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .mobile-btn {
+      pointer-events: auto;
+      flex: 1;
+      min-height: 64px;
+      border-radius: 14px;
+      border: 1px solid rgba(189, 243, 255, 0.35);
+      background: linear-gradient(180deg, rgba(25, 37, 66, 0.9), rgba(10, 18, 39, 0.9));
+      color: #ebf8ff;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      font-size: 15px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .mobile-btn:active { transform: scale(0.985); }
+    @media (max-width: 920px), (pointer: coarse) {
+      .mobile-controls { display: flex; }
+      .hint { font-size: clamp(13px, 3.6vw, 16px); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <div class="card" id="score">SKOR: 0</div>
+    <div class="card" id="speed">HIZ: 1.0x</div>
+  </div>
+  <div class="center" id="overlay">
+    <div>
+      <div class="title">PIKSEL SORFU</div>
+      <div class="hint">Bosluk / Yukari: Ziplama (basili tut = daha yuksek)
+Asagi: Egil
+Mobilden: SOL buton ZIPLA, SAG buton EGIL
+Baslamak icin dokun veya tusa bas</div>
+    </div>
+  </div>
+  <div class="perfect" id="perfect">MUKEMMEL!</div>
+  <div class="mobile-controls">
+    <button class="mobile-btn" id="btnJump">ZIPLA</button>
+    <button class="mobile-btn" id="btnDuck">EGIL</button>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const speedEl = document.getElementById('speed');
+  const overlay = document.getElementById('overlay');
+  const perfectEl = document.getElementById('perfect');
+  const btnJump = document.getElementById('btnJump');
+  const btnDuck = document.getElementById('btnDuck');
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  const input = { jumpHeld: false, duckHeld: false, jumpPressed: false };
+  let audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playJumpSound() {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(760, t);
+    osc.frequency.exponentialRampToValueAtTime(390, t + 0.11);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+
+  function playGameOverSound() {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(42, t + 0.36);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.4);
+  }
+
+  function onDown(code) {
+    ensureAudio();
+    if (!state.running) startGame();
+    if (code === 'jump') {
+      input.jumpHeld = true;
+      input.jumpPressed = true;
+    }
+    if (code === 'duck') input.duckHeld = true;
+  }
+  function onUp(code) {
+    if (code === 'jump') input.jumpHeld = false;
+    if (code === 'duck') input.duckHeld = false;
+  }
+
+  addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') onDown('jump');
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') onDown('duck');
+  });
+  addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') onUp('jump');
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') onUp('duck');
+  });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    onDown('jump');
+  }, { passive: false });
+  canvas.addEventListener('pointerup', () => onUp('jump'));
+  canvas.addEventListener('pointercancel', () => onUp('jump'));
+
+  btnJump.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown('jump'); }, { passive: false });
+  btnJump.addEventListener('pointerup', () => onUp('jump'));
+  btnJump.addEventListener('pointercancel', () => onUp('jump'));
+
+  btnDuck.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown('duck'); }, { passive: false });
+  btnDuck.addEventListener('pointerup', () => onUp('duck'));
+  btnDuck.addEventListener('pointercancel', () => onUp('duck'));
+
+  const base = {
+    gravity: 2200,
+    speed: 360,
+    jumpVel: 760,
+    maxHold: 0.19,
+    holdBoost: 1500
+  };
+
+  const state = {
+    running: false,
+    gameOver: false,
+    time: 0,
+    score: 0,
+    dist: 0,
+    speedMul: 1,
+    spawnT: 0,
+    hue: 210,
+    perfectTimer: 0,
+    player: { x: 120, y: 0, vy: 0, w: 38, h: 52, duckH: 34, onGround: true, holdT: 0 },
+    obstacles: [],
+    particles: []
+  };
+
+  function resetState() {
+    state.running = false;
+    state.gameOver = false;
+    state.time = 0;
+    state.score = 0;
+    state.dist = 0;
+    state.speedMul = 1;
+    state.spawnT = 0;
+    state.hue = 210;
+    state.perfectTimer = 0;
+    state.obstacles.length = 0;
+    state.particles.length = 0;
+    state.player.vy = 0;
+    state.player.holdT = 0;
+    state.player.onGround = true;
+  }
+
+  function startGame() {
+    if (state.running) return;
+    resetState();
+    state.running = true;
+    overlay.style.display = 'none';
+    placePlayerOnGround();
+  }
+
+  function endGame() {
+    state.running = false;
+    state.gameOver = true;
+    playGameOverSound();
+    overlay.style.display = 'grid';
+    overlay.querySelector('.hint').textContent = `Skor: ${Math.floor(state.score)}\nTekrar baslamak icin dokun veya tusa bas`;
+    input.jumpHeld = false;
+    input.duckHeld = false;
+  }
+
+  function placePlayerOnGround() {
+    const ground = innerHeight * 0.76;
+    const h = input.duckHeld ? state.player.duckH : state.player.h;
+    state.player.y = ground - h;
+  }
+
+  function spawnObstacle() {
+    const ground = innerHeight * 0.76;
+    const speed = base.speed * state.speedMul;
+    const overheadChance = Math.min(0.38, 0.13 + state.time * 0.015);
+    const isOverhead = Math.random() < overheadChance;
+
+    if (isOverhead) {
+      const h = 20 + Math.random() * 14;
+      state.obstacles.push({
+        x: innerWidth + 40,
+        y: ground - 66 - Math.random() * 10,
+        w: 34 + Math.random() * 20,
+        h,
+        kind: 'overhead',
+        passed: false,
+        speed
+      });
+    } else {
+      const h = 24 + Math.random() * 28;
+      state.obstacles.push({
+        x: innerWidth + 40,
+        y: ground - h,
+        w: 24 + Math.random() * 22,
+        h,
+        kind: 'ground',
+        passed: false,
+        speed
+      });
+    }
+  }
+
+  function spawnDust(px, py, n = 8) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 60 + Math.random() * 120;
+      state.particles.push({
+        x: px,
+        y: py,
+        vx: Math.cos(a) * s - 90,
+        vy: Math.sin(a) * s - 40,
+        life: 0.35 + Math.random() * 0.2,
+        t: 0,
+        size: 2 + Math.random() * 3
+      });
+    }
+  }
+
+  function aabb(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function triggerPerfect() {
+    state.perfectTimer = 0.45;
+    perfectEl.classList.add('show');
+  }
+
+  function update(dt) {
+    if (!state.running) return;
+    state.time += dt;
+    state.speedMul = 1 + Math.min(2.2, state.time * 0.07);
+    const runSpeed = base.speed * state.speedMul;
+    state.dist += runSpeed * dt;
+    state.score = state.dist * 0.1;
+    state.hue = 210 + Math.sin(state.time * 1.4) * 24 + state.speedMul * 18;
+
+    const p = state.player;
+    const currentH = input.duckHeld && p.onGround ? p.duckH : p.h;
+    const ground = innerHeight * 0.76;
+
+    if (input.jumpPressed && p.onGround) {
+      p.vy = -base.jumpVel;
+      p.onGround = false;
+      p.holdT = 0;
+      spawnDust(p.x + 8, ground - 2, 11);
+      playJumpSound();
+    }
+    input.jumpPressed = false;
+
+    if (!p.onGround) {
+      if (input.jumpHeld && p.holdT < base.maxHold && p.vy < -70) {
+        p.vy -= base.holdBoost * dt;
+        p.holdT += dt;
+      }
+      p.vy += base.gravity * dt;
+      p.y += p.vy * dt;
+      if (p.y + currentH >= ground) {
+        p.y = ground - currentH;
+        p.vy = 0;
+        p.onGround = true;
+        spawnDust(p.x + p.w * 0.4, ground - 2, 6);
+      }
+    } else {
+      p.y = ground - currentH;
+    }
+
+    state.spawnT -= dt;
+    if (state.spawnT <= 0) {
+      spawnObstacle();
+      const pace = Math.max(0.34, 1.02 - state.speedMul * 0.16);
+      state.spawnT = pace + Math.random() * 0.5;
+    }
+
+    const pBox = { x: p.x, y: p.y, w: p.w, h: currentH };
+
+    for (let i = state.obstacles.length - 1; i >= 0; i--) {
+      const o = state.obstacles[i];
+      o.x -= o.speed * dt;
+
+      if (aabb(pBox, o)) endGame();
+
+      if (!o.passed && o.x + o.w < p.x) {
+        o.passed = true;
+        let clearance = 999;
+        if (o.kind === 'ground') clearance = o.y - (pBox.y + pBox.h);
+        else clearance = pBox.y - (o.y + o.h);
+        if (clearance >= 0 && clearance < 9) triggerPerfect();
+      }
+
+      if (o.x + o.w < -60) state.obstacles.splice(i, 1);
+    }
+
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const pt = state.particles[i];
+      pt.t += dt;
+      pt.vy += 900 * dt;
+      pt.x += pt.vx * dt;
+      pt.y += pt.vy * dt;
+      if (pt.t >= pt.life) state.particles.splice(i, 1);
+    }
+
+    if (state.perfectTimer > 0) {
+      state.perfectTimer -= dt;
+      if (state.perfectTimer <= 0) perfectEl.classList.remove('show');
+    }
+
+    scoreEl.textContent = 'SKOR: ' + Math.floor(state.score);
+    speedEl.textContent = 'HIZ: ' + state.speedMul.toFixed(1) + 'x';
+  }
+
+  function draw() {
+    const w = innerWidth;
+    const h = innerHeight;
+    const ground = h * 0.76;
+
+    const hue = (state.hue % 360 + 360) % 360;
+    const bg1 = `hsl(${hue}, 70%, 14%)`;
+    const bg2 = `hsl(${(hue + 60) % 360}, 68%, 9%)`;
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, bg1);
+    g.addColorStop(1, bg2);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.globalAlpha = 0.3;
+    for (let i = 0; i < 80; i++) {
+      const x = (i * 91 - (state.dist * (0.15 + (i % 4) * 0.04))) % (w + 60);
+      const y = (i * 37) % (h * 0.7);
+      ctx.fillStyle = '#9ab9ff';
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#1f2e5f';
+    ctx.fillRect(0, ground, w, h - ground);
+    ctx.fillStyle = '#4de2c5';
+    for (let x = -((state.dist * 0.5) % 32); x < w + 32; x += 32) ctx.fillRect(x, ground, 16, 4);
+
+    const p = state.player;
+    const ph = input.duckHeld && p.onGround ? p.duckH : p.h;
+    ctx.fillStyle = '#63ffd7';
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.w, ph);
+    ctx.fillStyle = '#0f3f3a';
+    ctx.fillRect(p.x + 6, p.y + 8, 7, 7);
+
+    for (const o of state.obstacles) {
+      ctx.fillStyle = o.kind === 'ground' ? '#ff6b6b' : '#ff9f40';
+      ctx.fillRect(Math.round(o.x), Math.round(o.y), Math.round(o.w), Math.round(o.h));
+      ctx.fillStyle = '#2e0d16';
+      ctx.fillRect(o.x + 4, o.y + 4, Math.max(2, o.w - 8), Math.max(2, o.h - 8));
+    }
+
+    for (const pt of state.particles) {
+      const a = 1 - pt.t / pt.life;
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.fillStyle = '#b7ffe8';
+      ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
+    }
+    ctx.globalAlpha = 1;
+
+    if (!state.running && state.gameOver) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  placePlayerOnGround();
+})();
+</script>
+</body>
+</html>

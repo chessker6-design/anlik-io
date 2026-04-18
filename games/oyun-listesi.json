@@ -1,32 +1,220 @@
 [
-  {
-    "id": "neon-kacis",
-    "isim": "Neon Kaçış",
-    "kategori": "Refleks",
-    "resim": "https://picsum.photos/id/102/400/400"
-  },
-  {
-    "id": "kripto-cokus",
-    "isim": "Kripto Çöküşü",
-    "kategori": "Refleks",
-    "resim": "https://picsum.photos/id/103/400/400"
-  },
-  {
-    "id": "siber-kalkan",
-    "isim": "Siber Kalkan",
-    "kategori": "Strateji",
-    "resim": "https://picsum.photos/id/104/400/400"
-  },
-  {
-    "id": "drone-kurye",
-    "isim": "Drone Kurye",
-    "kategori": "Aksiyon",
-    "resim": "https://picsum.photos/id/106/400/400"
-  },
-  {
-    "id": "yapay-zeka-isyani",
-    "isim": "Yapay Zeka İsyanı",
-    "kategori": "Hayatta Kalma",
-    "resim": "https://picsum.photos/id/107/400/400"
-  }
+    {
+        "id": "neon-kacis",
+        "isim": "Neon Kaçış",
+        "kategori": "Refleks",
+        "resim": "https://picsum.photos/id/102/400/400"
+    },
+    {
+        "id": "kripto-cokus",
+        "isim": "Kripto Çöküşü",
+        "kategori": "Refleks",
+        "resim": "https://picsum.photos/id/103/400/400"
+    },
+    {
+        "id": "siber-kalkan",
+        "isim": "Siber Kalkan",
+        "kategori": "Strateji",
+        "resim": "https://picsum.photos/id/104/400/400"
+    },
+    {
+        "id": "drone-kurye",
+        "isim": "Drone Kurye",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/id/106/400/400"
+    },
+    {
+        "id": "yapay-zeka-isyani",
+        "isim": "Yapay Zeka İsyanı",
+        "kategori": "Hayatta Kalma",
+        "resim": "https://picsum.photos/id/107/400/400"
+    },
+    {
+        "id": "kutle-cekim",
+        "isim": "Kütle Çekim",
+        "kategori": "Fizik",
+        "resim": "https://picsum.photos/seed/kutle/400/400",
+        "url": "./games/ikinci-uretim/kutle-cekim/index.html"
+    },
+    {
+        "id": "yorunge-sapmasi",
+        "isim": "Yörünge Sapması",
+        "kategori": "Fizik",
+        "resim": "https://picsum.photos/seed/yorunge/400/400",
+        "url": "./games/ikinci-uretim/yorunge-sapmasi/index.html"
+    },
+    {
+        "id": "suru-zekasi",
+        "isim": "Sürü Zekası",
+        "kategori": "Fizik",
+        "resim": "https://picsum.photos/seed/suru/400/400",
+        "url": "./games/ikinci-uretim/suru-zekasi/index.html"
+    },
+    {
+        "id": "neon-sovalye",
+        "isim": "Neon Şövalye",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/seed/neon/400/400",
+        "url": "./games/ikinci-uretim/neon-sovalye/neon-sovalye.html"
+    },
+    {
+        "id": "hiper-suruklenme",
+        "isim": "Hiper Sürüklenme",
+        "kategori": "Yarış",
+        "resim": "https://picsum.photos/seed/hiper/400/400",
+        "url": "./games/ikinci-uretim/hiper-suruklenme/hiper-suruklenme.html"
+    },
+    {
+        "id": "siber-otoyol",
+        "isim": "Siber Otoyol",
+        "kategori": "Yarış",
+        "resim": "https://picsum.photos/seed/siber/400/400",
+        "url": "./games/ikinci-uretim/siber-otoyol/index.html"
+    },
+    {
+        "id": "golge-suikastcisi",
+        "isim": "Gölge Suikastçısı",
+        "kategori": "Macera",
+        "resim": "https://picsum.photos/seed/golge/400/400",
+        "url": "./games/ikinci-uretim/golge-suikastcisi/index.html"
+    },
+    {
+        "id": "cekirdek-erimesi",
+        "isim": "Çekirdek Erimesi",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/seed/cekirdek/400/400",
+        "url": "./games/ikinci-uretim/cekirdek-erimesi/index.html"
+    },
+    {
+        "id": "boyut-yolcusu",
+        "isim": "Boyut Yolcusu",
+        "kategori": "Macera",
+        "resim": "https://picsum.photos/seed/boyut/400/400",
+        "url": "./games/ikinci-uretim/boyut-yolcusu/index.html"
+    },
+    {
+        "id": "piksel-sorfu",
+        "isim": "Piksel Sörfü",
+        "kategori": "Arcade",
+        "resim": "https://picsum.photos/seed/piksel/400/400",
+        "url": "./games/ikinci-uretim/piksel-sorfu/index.html"
+    },
+    {
+        "id": "glitch-avcisi",
+        "isim": "Glitch Avcısı",
+        "kategori": "Arcade",
+        "resim": "https://picsum.photos/seed/glitch/400/400",
+        "url": "./games/ikinci-uretim/glitch-avcisi/index.html"
+    },
+    {
+        "id": "zaman-catlagi",
+        "isim": "Zaman Çatlağı",
+        "kategori": "Arcade",
+        "resim": "https://picsum.photos/seed/zaman/400/400",
+        "url": "./games/ikinci-uretim/zaman-catlagi/index.html"
+    },
+    {
+        "id": "lazer-agi",
+        "isim": "Lazer Ağı",
+        "kategori": "Zeka",
+        "resim": "https://picsum.photos/seed/lazer/400/400",
+        "url": "./games/ikinci-uretim/lazer-agi/index.html"
+    },
+    {
+        "id": "viral-dongu",
+        "isim": "Viral Döngü",
+        "kategori": "Strateji",
+        "resim": "https://picsum.photos/seed/viral/400/400",
+        "url": "./games/ikinci-uretim/viral-dongu/index.html"
+    },
+    {
+        "id": "hafiza-korsani",
+        "isim": "Hafıza Korsanı",
+        "kategori": "Zeka",
+        "resim": "https://picsum.photos/seed/hafiza/400/400",
+        "url": "./games/ikinci-uretim/hafiza-korsani/index.html"
+    },
+    {
+        "id": "itki-vektoru",
+        "isim": "İtki Vektörü",
+        "kategori": "Fizik",
+        "resim": "https://picsum.photos/seed/itki/400/400",
+        "url": "./games/ikinci-uretim/itki-vektoru/index.html"
+    },
+    {
+        "id": "kisa-devre",
+        "isim": "Kısa Devre",
+        "kategori": "Zeka",
+        "resim": "https://picsum.photos/seed/devre/400/400",
+        "url": "./games/ikinci-uretim/kisa-devre/index.html"
+    },
+    {
+        "id": "taktik-yorunge",
+        "isim": "Taktik Yörünge",
+        "kategori": "Strateji",
+        "resim": "https://picsum.photos/seed/taktik/400/400",
+        "url": "./games/ikinci-uretim/taktik-yorunge/index.html"
+    },
+    {
+        "id": "frekans-avcisi",
+        "isim": "Frekans Avcısı",
+        "kategori": "Zeka",
+        "resim": "https://picsum.photos/seed/frekans/400/400",
+        "url": "./games/ikinci-uretim/frekans-avcisi/index.html"
+    },
+    {
+        "id": "tartarus-bolum-1",
+        "isim": "Kayıp Kapı (Bölüm 1)",
+        "kategori": "Macera",
+        "resim": "https://picsum.photos/seed/kapi/400/400",
+        "url": "./games/ikinci-uretim/hikayeli-oyun-serisi/bolum-1/index.html"
+    },
+    {
+        "id": "tartarus-bolum-2",
+        "isim": "Derin Karanlık (Bölüm 2)",
+        "kategori": "Hayatta Kalma",
+        "resim": "https://picsum.photos/seed/karanlik/400/400",
+        "url": "./games/ikinci-uretim/hikayeli-oyun-serisi/bolum-2/index.html"
+    },
+    {
+        "id": "tartarus-bolum-3",
+        "isim": "Sistem Çöküşü (Bölüm 3)",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/seed/cokus/400/400",
+        "url": "./games/ikinci-uretim/hikayeli-oyun-serisi/bolum-3/index.html"
+    },
+    {
+        "id": "sinyal-kulesi-1-uyanis",
+        "isim": "Sinyal Kulesi I: Uyanış",
+        "kategori": "Zeka",
+        "resim": "https://picsum.photos/seed/sinyal-uyanis/400/400",
+        "url": "./games/ikinci-uretim/codex%205.4/sinyal-kulesi-1-uyanis/index.html"
+    },
+    {
+        "id": "sinyal-kulesi-2-kacis",
+        "isim": "Sinyal Kulesi II: Kaçış",
+        "kategori": "Arcade",
+        "resim": "https://picsum.photos/seed/sinyal-kacis/400/400",
+        "url": "./games/ikinci-uretim/codex%205.4/sinyal-kulesi-2-kacis/index.html"
+    },
+    {
+        "id": "sinyal-kulesi-3-son-yayin",
+        "isim": "Sinyal Kulesi III: Son Yayın",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/seed/sinyal-yayin/400/400",
+        "url": "./games/ikinci-uretim/codex%205.4/sinyal-kulesi-3-son-yayin/index.html"
+    },
+    {
+        "id": "void-runner",
+        "isim": "Void Runner",
+        "kategori": "Arcade",
+        "resim": "https://picsum.photos/seed/void/400/400",
+        "url": "./games/ikinci-uretim/void-runner/void-runner.html"
+    },
+    {
+        "id": "yercekimi-darbesi",
+        "isim": "Yerçekimi Darbesi",
+        "kategori": "Aksiyon",
+        "resim": "https://picsum.photos/seed/yercekimi/400/400"
+    }
 ]

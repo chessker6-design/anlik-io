@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Proje TARTARUS - Bölüm 1: Kayıp Kapı</title>
+    <style>
+        :root { --main-bg: #050a0f; --primary: #0f3; --text-dim: #0a0; --danger: #f03; }
+        body { margin: 0; padding: 0; background: var(--main-bg); color: var(--primary); font-family: 'Courier New', Courier, monospace; overflow: hidden; user-select: none; touch-action: none; -webkit-touch-callout: none; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh;}
+        
+        .screen { position: absolute; top:0; left:0; width: 100%; height: 100%; display: none; flex-direction: column; box-sizing: border-box; padding: 20px;}
+        .active { display: flex; }
+        
+        /* Menu */
+        #menu { justify-content: center; align-items: center; text-align: center; background: radial-gradient(circle, #051515, var(--main-bg)); }
+        h1 { font-size: 8vw; margin-bottom: 5px; text-shadow: 0 0 15px var(--primary); }
+        h2 { font-size: 4vw; color: var(--text-dim); margin-bottom: 40px; }
+        .btn { padding: 15px 40px; margin: 10px; font-size: 24px; font-family: 'Courier New', Courier, monospace; font-weight: bold; background: transparent; color: var(--primary); border: 2px solid var(--primary); border-radius: 4px; cursor: pointer; transition: 0.3s; text-shadow: 0 0 5px var(--primary); box-shadow: 0 0 10px var(--primary) inset; -webkit-tap-highlight-color: transparent;}
+        .btn:hover, .btn:active { background: rgba(0, 255, 51, 0.2); transform: scale(1.05); }
+
+        /* Story */
+        #story { justify-content: center; align-items: center; cursor: pointer; }
+        .story-box { width: 90%; max-width: 600px; min-height: 200px; border: 1px solid var(--text-dim); padding: 20px; box-shadow: 0 0 15px rgba(0,255,51,0.1) inset; position: relative; background: rgba(0,0,0,0.5); }
+        .typewriter { font-size: 22px; line-height: 1.5; text-shadow: 0 0 3px var(--primary); white-space: pre-wrap;}
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        .tap-indicator { position: absolute; bottom: 10px; right: 20px; font-size: 14px; opacity: 0.5; }
+
+        /* Puzzle */
+        #puzzle { justify-content: flex-start; align-items: center; }
+        .header { text-align: center; margin-bottom: 20px; flex-shrink: 0;}
+        .header p { margin: 5px; font-size: 18px; color: var(--text-dim); }
+        canvas { border: 2px solid var(--text-dim); background: #020508; box-shadow: 0 0 20px rgba(0, 255, 51, 0.2); max-width: 100%; max-height: 60vh; object-fit: contain; cursor: pointer; }
+        
+        .scanline { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 100; opacity: 0.6; }
+
+        @media(max-width: 600px) {
+            h1 { font-size: 10vw;}
+            h2 { font-size: 6vw;}
+            .typewriter { font-size: 18px; }
+            .btn { font-size: 20px; padding: 12px 30px;}
+        }
+    </style>
+</head>
+<body>
+    <div class="scanline"></div>
+
+    <div id="menu" class="screen active">
+        <h1>PROJE TARTARUS</h1>
+        <h2>Bölüm 1 / Kayıp Kapı</h2>
+        <button class="btn" onclick="startGame()">SİSTEME GİRİŞ YAP</button>
+    </div>
+
+    <div id="story" class="screen" onclick="nextStory()">
+        <div class="story-box">
+            <div id="storyText" class="typewriter"></div><span class="blink">_</span>
+            <div class="tap-indicator">Devam etmek için dokun</div>
+        </div>
+    </div>
+
+    <div id="puzzle" class="screen">
+        <div class="header">
+            <h1 style="font-size:32px; margin-top:0;">GÜÇ YÖNLENDİRME</h1>
+            <p>Ana kapı kilidi enerjisiz.</p>
+            <p>Güç akışını başlatmak için düğümleri (node) çevirin.</p>
+        </div>
+        <canvas id="c"></canvas>
+    </div>
+
+    <script>
+        const storyLines = [
+            `> Yıl 2142. Yeraltı Araştırma Tesisi "Tartarus".`,
+            `> İletişim kopalı 72 saat oldu. Merkezin emriyle buraya gönderilen son müfettişsiniz.`,
+            `> Dışarıdaki kum fırtınası giderek şiddetleniyor. Şansınıza ana giriş kapısına ulaşabildiniz.`,
+            `> Ancak kapının güvenlik aydınlatmaları sönük. Kırmızı acil durum ışıkları dışında her yer zifiri karanlık.`,
+            `> Yerde hasar görmüş bir veri paneli buluyorsunuz. Üzerinde bir not var: \n\n"İçeri girmeyin. Sistem kendi kendini izole etti."`,
+            `> Başka çareniz yok. Fırtına sizi öldürmeden içeri girmek zorundasınız. \n\nPanelin manuel güç bypass arayüzüne bağlanıyorsunuz...`
+        ];
+
+        const outLines = [
+            `> GÜÇ AKIŞI SAĞLANDI...`,
+            `> Kapıların hidrolik sesi devasa bir yankıyla boşlukta uğulduyor.`,
+            `> Ağır çelik kapı yavaşça açılırken içeriden buz gibi bir hava yüzünüze çarpıyor.`,
+            `> Tartarus'a hoş geldiniz. \n\n(Bölüm 1 Sonu. Bölüm 2: Derin Aydınlık oyununa geçebilirsiniz)`
+        ];
+
+        let currentStoryObj = null;
+        let storyIndex = 0;
+        let isTyping = false;
+        let actx;
+
+        function initAudio() {
+            if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+            if(actx.state === 'suspended') actx.resume();
+        }
+
+        function beep(freq = 600, type = 'square', dur = 0.05, vol = 0.1) {
+            if(!actx) return;
+            let o = actx.createOscillator(); let g = actx.createGain();
+            o.type = type; o.frequency.value = freq;
+            g.gain.setValueAtTime(vol, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
+            o.connect(g).connect(actx.destination);
+            o.start(); o.stop(actx.currentTime + dur);
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function startGame() {
+            initAudio();
+            showScreen('story');
+            currentStoryObj = storyLines;
+            storyIndex = 0;
+            typeStory();
+        }
+
+        function nextStory() {
+            if(isTyping) {
+                // Skip typing
+                document.getElementById('storyText').innerText = currentStoryObj[storyIndex];
+                isTyping = false;
+                return;
+            }
+            storyIndex++;
+            if(storyIndex < currentStoryObj.length) {
+                typeStory();
+            } else {
+                if(currentStoryObj === storyLines) {
+                    startPuzzle();
+                } else {
+                    // Back to main menu or external nav
+                    showScreen('menu');
+                }
+            }
+        }
+
+        async function typeStory() {
+            isTyping = true;
+            let text = currentStoryObj[storyIndex];
+            let el = document.getElementById('storyText');
+            el.innerText = "";
+            for(let i=0; i<text.length; i++) {
+                if(!isTyping) break;
+                el.innerText += text[i];
+                if(i % 3 === 0) beep(800 + Math.random()*200, 'square', 0.02, 0.02);
+                await new Promise(r => setTimeout(r, 20 + Math.random()*30));
+            }
+            isTyping = false;
+        }
+
+        // PUZZLE LOGIC
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let tiles = [];
+        let pSize = 3; // 3x3 grid
+        let tileSize = 0;
+        let isSolved = false;
+        
+        // Types: 0: Empty, 1: Straight, 2: Elbow
+        // Rotation: 0=Up/Right logic based on type.
+        // For Straight: 0=Vertical, 1=Horizontal
+        // For Elbow: 0=TopRight, 1=RightBottom, 2=BottomLeft, 3=LeftTop
+        
+        // Layout: 
+        // Start: Top of (0,0). End: Bottom of (2,2)
+        // Correct Path: (0,0) -> (1,0) -> (1,1) -> (1,2) -> (2,2)
+        // Wait, easy layout:
+        // (0,0): Elbow Top-Right (0) to Top-Bottom? No, needs to enter from Top. So (0,0) enters from Top.
+        // Let's manually define tiles and their correct rotation.
+        const gridData = [
+            {id:0, type: 2, rot: Math.floor(Math.random()*4), correct: 1 }, // (0,0) elbow entering top, exiting right -> RightBottom (1)
+            {id:1, type: 1, rot: Math.floor(Math.random()*2), correct: 1 }, // (1,0) straight entering left, exiting right -> Horizontal (1)
+            {id:2, type: 2, rot: Math.floor(Math.random()*4), correct: 2 }, // (2,0) elbow entering left, exiting bottom -> BottomLeft (2)
+            {id:3, type: 0, rot: 0, correct: 0 },                           // (0,1) empty
+            {id:4, type: 2, rot: Math.floor(Math.random()*4), correct: 0 }, // (1,1) fake elbow
+            {id:5, type: 1, rot: Math.floor(Math.random()*2), correct: 0 }, // (2,1) straight vertical -> Vertical (0)
+            {id:6, type: 0, rot: 0, correct: 0 },                           // (0,2) empty
+            {id:7, type: 1, rot: Math.floor(Math.random()*2), correct: 1 }, // (1,2) fake straight
+            {id:8, type: 1, rot: Math.floor(Math.random()*2), correct: 0 }, // (2,2) straight vertical to EXIT -> Vertical (0)
+        ];
+        // Wait, path: (0,0)[top->right] => (1,0)[left->right] => (2,0)[left->down] => (2,1)[up->down] => (2,2)[up->down] out.
+        
+        function initPuzzle() {
+            let dim = Math.min(window.innerWidth*0.9, window.innerHeight*0.5, 400);
+            c.width = dim; c.height = dim;
+            tileSize = dim / pSize;
+            tiles = JSON.parse(JSON.stringify(gridData));
+            isSolved = false;
+            drawPuzzle();
+        }
+
+        function checkWin() {
+            // Check specific tiles
+            if (tiles[0].rot % 4 === 1 && 
+                tiles[1].rot % 2 === 1 && 
+                tiles[2].rot % 4 === 2 && 
+                tiles[5].rot % 2 === 0 && 
+                tiles[8].rot % 2 === 0) {
+                isSolved = true;
+                drawPuzzle();
+                beep(800, 'sine', 0.1, 0.2);
+                setTimeout(()=>beep(1000, 'sine', 0.4, 0.2), 150);
+                setTimeout(() => {
+                    showScreen('story');
+                    currentStoryObj = outLines;
+                    storyIndex = 0;
+                    typeStory();
+                }, 1500);
+            }
+        }
+
+        c.addEventListener('mousedown', handleClick);
+        c.addEventListener('touchstart', (e)=> {
+            e.preventDefault();
+            let touch = e.touches[0];
+            let mouseEvent = new MouseEvent('mousedown', {clientX: touch.clientX, clientY: touch.clientY});
+            handleClick(mouseEvent);
+        }, {passive: false});
+
+        function handleClick(e) {
+            if(isSolved) return;
+            const rect = c.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            let tx = Math.floor(x / tileSize);
+            let ty = Math.floor(y / tileSize);
+            let idx = ty * pSize + tx;
+            if(idx >= 0 && idx < tiles.length && tiles[idx].type !== 0) {
+                tiles[idx].rot++;
+                beep(400, 'triangle', 0.05, 0.3);
+                drawPuzzle();
+                checkWin();
+            }
+        }
+
+        function drawPuzzle() {
+            ctx.fillStyle = '#020508';
+            ctx.fillRect(0,0,c.width,c.height);
+
+            // Draw grid lines
+            ctx.strokeStyle = '#051810';
+            ctx.lineWidth = 2;
+            for(let i=0; i<=pSize; i++) {
+                ctx.beginPath(); ctx.moveTo(i*tileSize, 0); ctx.lineTo(i*tileSize, c.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i*tileSize); ctx.lineTo(c.width, i*tileSize); ctx.stroke();
+            }
+
+            // Draw Ports
+            ctx.fillStyle = isSolved ? '#0f3' : '#f03';
+            ctx.fillRect(tileSize/2 - 10, 0, 20, 10); // IN
+            ctx.fillRect(c.width - tileSize/2 - 10, c.height-10, 20, 10); // OUT
+
+            tiles.forEach((t, i) => {
+                let tx = i % pSize;
+                let ty = Math.floor(i / pSize);
+                let cx = tx * tileSize + tileSize/2;
+                let cy = ty * tileSize + tileSize/2;
+
+                ctx.save();
+                ctx.translate(cx, cy);
+                
+                // Rotation
+                let ang = 0;
+                if(t.type === 1) ang = (t.rot % 2) * Math.PI/2;
+                else if(t.type === 2) ang = (t.rot % 4) * Math.PI/2;
+                ctx.rotate(ang);
+
+                ctx.strokeStyle = isSolved ? '#0f3' : '#0a5';
+                ctx.lineWidth = tileSize * 0.25;
+                ctx.lineCap = 'square';
+                ctx.lineJoin = 'miter';
+
+                if(t.type === 1) { // Straight (draws vertical by default)
+                    ctx.beginPath(); ctx.moveTo(0, -tileSize/2); ctx.lineTo(0, tileSize/2); ctx.stroke();
+                } else if(t.type === 2) { // Elbow (draws Top-Right by default)
+                    ctx.beginPath(); ctx.moveTo(0, -tileSize/2); ctx.lineTo(0,0); ctx.lineTo(tileSize/2, 0); ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+            
+            // Draw glow if solved
+            if(isSolved) {
+                ctx.fillStyle = 'rgba(0, 255, 51, 0.1)';
+                ctx.fillRect(0,0,c.width,c.height);
+            }
+        }
+
+        function startPuzzle() {
+            showScreen('puzzle');
+            initPuzzle();
+        }
+
+        window.addEventListener('resize', () => { if(document.getElementById('puzzle').classList.contains('active')) initPuzzle(); });
+    </script>
+</body>
+</html>

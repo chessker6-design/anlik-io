@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>İtki Vektörü</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050510;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1,
+        p {
+            margin: 5px 0;
+        }
+
+        .alert {
+            color: #f0f;
+            text-shadow: 0 0 10px #f0f;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 30px;
+            text-align: center;
+            text-shadow: 0 0 20px #fff;
+            display: none;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* Dokunmatik Kontroller (Sadece Mobilde Görünür) */
+        #mobile-controls {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            border-radius: 50%;
+            color: #0ff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+
+        .btn:active {
+            background: rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        @media (min-width: 768px) {
+            #mobile-controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui">
+        <h1>İTKİ VEKTÖRÜ</h1>
+        <p>Yakıt: <span id="fuelDisp">1000</span></p>
+        <p>Dikey Hız: <span id="vSpeedDisp">0.0</span></p>
+        <p>Yatay Hız: <span id="hSpeedDisp">0.0</span></p>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="mobile-controls">
+        <div class="control-group">
+            <div class="btn" id="btn-left">↺</div>
+            <div class="btn" id="btn-right">↻</div>
+        </div>
+        <div class="btn" id="btn-thrust" style="width: 80px; height: 80px;">🚀</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const fuelDisp = document.getElementById('fuelDisp');
+        const vSpeedDisp = document.getElementById('vSpeedDisp');
+        const hSpeedDisp = document.getElementById('hSpeedDisp');
+        const messageBox = document.getElementById('message');
+
+        let width, height;
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- SES MOTORU (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let thrustOsc = null;
+        let thrustGain = null;
+
+        function initAudio() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playThrustSound(isThrusting) {
+            if (isThrusting) {
+                if (!thrustOsc) {
+                    thrustOsc = audioCtx.createOscillator();
+                    thrustOsc.type = 'sawtooth';
+                    thrustOsc.frequency.setValueAtTime(30, audioCtx.currentTime);
+
+                    thrustGain = audioCtx.createGain();
+                    thrustGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+
+                    // Titreşim (Rumble) efekti için basit filtre
+                    let filter = audioCtx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 400;
+
+                    thrustOsc.connect(filter);
+                    filter.connect(thrustGain);
+                    thrustGain.connect(audioCtx.destination);
+                    thrustOsc.start();
+                }
+            } else {
+                if (thrustOsc) {
+                    thrustGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    thrustOsc.stop(audioCtx.currentTime + 0.1);
+                    thrustOsc = null;
+                }
+            }
+        }
+
+        function playExplosion() {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        function playSuccess() {
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(554, audioCtx.currentTime + 0.1);
+            osc.frequency.setValueAtTime(659, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        // --- GİRDİLER (Inputs) ---
+        const keys = { w: false, a: false, d: false, up: false, left: false, right: false };
+
+        window.addEventListener('keydown', (e) => {
+            initAudio();
+            if (e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
+            if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
+            if (e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
+            if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
+            if (e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+        });
+
+        // Dokunmatik
+        const btnThrust = document.getElementById('btn-thrust');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+
+        const addTouch = (el, key) => {
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); keys[key] = true; });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+        };
+        addTouch(btnThrust, 'w');
+        addTouch(btnLeft, 'a');
+        addTouch(btnRight, 'd');
+
+        // --- OYUN DEĞİŞKENLERİ VE FİZİK ---
+        const gravity = 0.04;
+        let gameState = 'playing'; // playing, win, lose
+        let screenShake = 0;
+
+        const rocket = {
+            x: 0, y: 0, vx: 0, vy: 0,
+            angle: 0, width: 20, height: 40,
+            thrustPower: 0.1, rotSpeed: 0.05,
+            fuel: 1000,
+            reset: function () {
+                this.x = width / 2;
+                this.y = 50;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = 0;
+                this.angle = (Math.random() - 0.5);
+                this.fuel = 1000;
+            }
+        };
+
+        const platform = {
+            x: 0, y: 0, w: 100, h: 20
+        };
+
+        let particles = [];
+        let stars = [];
+
+        function createStars() {
+            stars = [];
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 2
+                });
+            }
+        }
+
+        function init() {
+            rocket.reset();
+            platform.x = (width / 2) - 50 + (Math.random() * 200 - 100);
+            platform.y = height - 50;
+            gameState = 'playing';
+            screenShake = 0;
+            particles = [];
+            messageBox.style.display = 'none';
+            createStars();
+        }
+
+        // --- GÜNCELLEME VE ÇİZİM ---
+        function update() {
+            if (gameState !== 'playing') return;
+
+            // Fizik Vektörleri
+            let thrusting = keys.w && rocket.fuel > 0;
+
+            if (keys.a) rocket.angle -= rocket.rotSpeed;
+            if (keys.d) rocket.angle += rocket.rotSpeed;
+
+            if (thrusting) {
+                rocket.fuel -= 2;
+                rocket.vx += Math.sin(rocket.angle) * rocket.thrustPower;
+                rocket.vy -= Math.cos(rocket.angle) * rocket.thrustPower;
+
+                // Partikül oluştur
+                particles.push({
+                    x: rocket.x - Math.sin(rocket.angle) * (rocket.height / 2),
+                    y: rocket.y + Math.cos(rocket.angle) * (rocket.height / 2),
+                    vx: -Math.sin(rocket.angle) * 2 + (Math.random() - 0.5),
+                    vy: Math.cos(rocket.angle) * 2 + (Math.random() - 0.5),
+                    life: 1.0,
+                    color: Math.random() > 0.5 ? '#f90' : '#0ff'
+                });
+            }
+
+            playThrustSound(thrusting);
+
+            rocket.vy += gravity;
+            rocket.x += rocket.vx;
+            rocket.y += rocket.vy;
+
+            // Ekran Sınırları (Yatayda döngü)
+            if (rocket.x < 0) rocket.x = width;
+            if (rocket.x > width) rocket.x = 0;
+
+            // Çarpışma Kontrolü (Zemin veya Platform)
+            if (rocket.y + rocket.height / 2 >= platform.y) {
+                let onPlatform = rocket.x > platform.x && rocket.x < platform.x + platform.w;
+                let safeSpeed = Math.abs(rocket.vy) < 2.0 && Math.abs(rocket.vx) < 1.0;
+                let safeAngle = Math.abs(rocket.angle % (Math.PI * 2)) < 0.3;
+
+                if (onPlatform && safeSpeed && safeAngle) {
+                    gameState = 'win';
+                    rocket.vy = 0; rocket.vx = 0; rocket.angle = 0;
+                    rocket.y = platform.y - rocket.height / 2;
+                    playSuccess();
+                    playThrustSound(false);
+                    showMessage("BAŞARILI İNİŞ!<br><span style='font-size:16px;color:#0ff;'>Tıklayarak Yeniden Başla</span>");
+                } else {
+                    crash();
+                }
+            } else if (rocket.y > height) {
+                crash();
+            }
+
+            // Partikül Güncelleme
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.05;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Ekran Titremesi
+            if (screenShake > 0) screenShake *= 0.9;
+            if (screenShake < 0.5) screenShake = 0;
+
+            // Arayüz
+            fuelDisp.innerText = Math.max(0, rocket.fuel);
+            if (rocket.fuel < 200) fuelDisp.className = 'alert';
+            else fuelDisp.className = '';
+
+            vSpeedDisp.innerText = rocket.vy.toFixed(1);
+            vSpeedDisp.style.color = rocket.vy > 2.0 ? '#f00' : '#0ff';
+            hSpeedDisp.innerText = Math.abs(rocket.vx).toFixed(1);
+        }
+
+        function crash() {
+            gameState = 'lose';
+            playThrustSound(false);
+            playExplosion();
+            screenShake = 20;
+
+            // Patlama efekti
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: rocket.x, y: rocket.y,
+                    vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10,
+                    life: 1.5, color: Math.random() > 0.5 ? '#f00' : '#fa0'
+                });
+            }
+            showMessage("SİSTEM ÇÖKTÜ!<br><span style='font-size:16px;color:#f00;'>Tıklayarak Yeniden Başla</span>");
+        }
+
+        function showMessage(msg) {
+            messageBox.innerHTML = msg;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                window.addEventListener('click', retryGame, { once: true });
+                window.addEventListener('touchstart', retryGame, { once: true });
+            }, 500);
+        }
+
+        function retryGame() {
+            if (gameState !== 'playing') init();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            if (screenShake > 0) {
+                ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+            }
+
+            // Yıldızlar
+            ctx.fillStyle = '#fff';
+            stars.forEach(s => {
+                ctx.globalAlpha = Math.random() * 0.5 + 0.5;
+                ctx.fillRect(s.x, s.y, s.size, s.size);
+            });
+            ctx.globalAlpha = 1.0;
+
+            // Platform
+            ctx.fillStyle = '#0ff';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#0ff';
+            ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+            // Uyarı Işıkları
+            if (Math.floor(Date.now() / 200) % 2 === 0) {
+                ctx.fillStyle = '#f00';
+                ctx.fillRect(platform.x, platform.y, 10, 5);
+                ctx.fillRect(platform.x + platform.w - 10, platform.y, 10, 5);
+            }
+            ctx.shadowBlur = 0;
+
+            // Roket
+            if (gameState !== 'lose') {
+                ctx.translate(rocket.x, rocket.y);
+                ctx.rotate(rocket.angle);
+
+                // Gövde
+                ctx.fillStyle = '#eee';
+                ctx.beginPath();
+                ctx.moveTo(0, -rocket.height / 2);
+                ctx.lineTo(rocket.width / 2, rocket.height / 2);
+                ctx.lineTo(-rocket.width / 2, rocket.height / 2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Neon Çizgiler
+                ctx.strokeStyle = '#0ff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Ayaklar
+                ctx.beginPath();
+                ctx.moveTo(-rocket.width / 2, rocket.height / 2);
+                ctx.lineTo(-rocket.width, rocket.height / 2 + 5);
+                ctx.moveTo(rocket.width / 2, rocket.height / 2);
+                ctx.lineTo(rocket.width, rocket.height / 2 + 5);
+                ctx.stroke();
+
+                ctx.rotate(-rocket.angle);
+                ctx.translate(-rocket.x, -rocket.y);
+            }
+
+            // Partiküller
+            ctx.globalCompositeOperation = 'lighter';
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        init();
+        gameLoop();
+    </script>
+</body>
+
+</html>

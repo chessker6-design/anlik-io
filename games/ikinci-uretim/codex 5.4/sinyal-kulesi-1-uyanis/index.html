@@ -1,0 +1,294 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sinyal Kulesi I: Uyanış</title>
+  <style>
+    :root {
+      --bg: #08100e;
+      --panel: rgba(7, 22, 18, .78);
+      --ink: #f4ffe9;
+      --muted: #9bb8a4;
+      --gold: #ffd166;
+      --green: #48f2a8;
+      --cyan: #69d2ff;
+      --danger: #ff5a6d;
+      --cell: min(12.5vw, 74px);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      font-family: Georgia, 'Times New Roman', serif;
+      background:
+        radial-gradient(circle at 18% 20%, rgba(105, 210, 255, .18), transparent 28%),
+        radial-gradient(circle at 82% 12%, rgba(255, 209, 102, .14), transparent 26%),
+        linear-gradient(135deg, #06110f 0%, #132119 52%, #07090c 100%);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: radial-gradient(circle, black, transparent 82%);
+    }
+    .shell {
+      width: min(1120px, calc(100vw - 28px));
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 22px;
+      align-items: center;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, .15);
+      background: linear-gradient(145deg, rgba(8, 24, 19, .88), rgba(4, 9, 11, .78));
+      box-shadow: 0 28px 90px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1);
+      border-radius: 30px;
+      position: relative;
+    }
+    .intro { max-width: 420px; }
+    .tag { letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-size: 12px; font-weight: 700; }
+    h1 { margin: 10px 0 8px; font-size: clamp(34px, 5vw, 68px); line-height: .94; font-weight: 900; }
+    p { color: var(--muted); font-size: 16px; line-height: 1.55; margin: 0 0 18px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+    .stat {
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.055);
+      border-radius: 18px;
+    }
+    .stat b { display: block; font-size: 24px; color: var(--gold); }
+    .stat span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      color: #06100d;
+      background: linear-gradient(135deg, var(--gold), var(--green));
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 12px 28px rgba(72,242,168,.18);
+    }
+    .ghost { color: var(--ink); background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); box-shadow: none; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .board-wrap {
+      padding: 14px;
+      border-radius: 26px;
+      background: radial-gradient(circle at center, rgba(72,242,168,.14), rgba(255,255,255,.055));
+      border: 1px solid rgba(255,255,255,.14);
+      position: relative;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell));
+      grid-template-rows: repeat(6, var(--cell));
+      gap: 8px;
+    }
+    .tile {
+      position: relative;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255,255,255,.11), rgba(255,255,255,.035));
+      cursor: pointer;
+      transition: transform .14s ease, border-color .2s ease, box-shadow .2s ease;
+      overflow: hidden;
+    }
+    .tile:hover { transform: translateY(-2px); }
+    .tile.powered { border-color: rgba(72,242,168,.78); box-shadow: 0 0 22px rgba(72,242,168,.22); }
+    .tile.lock { cursor: default; }
+    .tile.source { box-shadow: 0 0 26px rgba(105,210,255,.3); }
+    .tile.target { box-shadow: 0 0 28px rgba(255,209,102,.24); }
+    .pipe { position: absolute; inset: 0; transform: rotate(var(--rot)); transition: transform .18s ease; }
+    .pipe::before, .pipe::after, .arm { content: ""; position: absolute; background: rgba(244,255,233,.28); border-radius: 99px; }
+    .tile.powered .pipe::before, .tile.powered .pipe::after, .tile.powered .arm { background: linear-gradient(90deg, var(--cyan), var(--green)); box-shadow: 0 0 18px var(--green); }
+    .pipe::before { width: 16%; height: 16%; left: 42%; top: 42%; }
+    .arm { left: 46%; top: 0; width: 8%; height: 50%; transform-origin: bottom center; }
+    .arm.e { transform: rotate(90deg); }
+    .arm.s { transform: rotate(180deg); }
+    .arm.w { transform: rotate(270deg); }
+    .mark { position: absolute; inset: auto 8px 7px; text-align: center; color: var(--gold); font-weight: 900; font-size: 11px; letter-spacing: .1em; }
+    #toast {
+      position: fixed;
+      left: 50%; bottom: 24px;
+      transform: translateX(-50%) translateY(30px);
+      opacity: 0;
+      pointer-events: none;
+      background: rgba(2,8,7,.88);
+      border: 1px solid rgba(72,242,168,.35);
+      padding: 13px 18px;
+      border-radius: 18px;
+      color: var(--ink);
+      transition: .25s ease;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; padding: 16px; }
+      .intro { max-width: none; }
+      .board-wrap { justify-self: center; }
+      :root { --cell: min(13.2vw, 64px); }
+      #board { gap: 6px; }
+      .tile { border-radius: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="intro">
+      <div class="tag">Sinyal Kulesi Serisi / Bölüm 1</div>
+      <h1>Uyanış</h1>
+      <p>Eski kulenin kabloları fırtınada döndü. Kaynaktan altın kuleye kesintisiz hat kurmak için parçaları çevir. Yeşil enerji hedefe ulaşınca bir sonraki düğüm açılır.</p>
+      <div class="stats">
+        <div class="stat"><b id="level">1</b><span>Düğüm</span></div>
+        <div class="stat"><b id="moves">0</b><span>Hamle</span></div>
+        <div class="stat"><b id="score">0</b><span>Skor</span></div>
+      </div>
+      <div class="actions">
+        <button id="resetBtn">Düğümü Sıfırla</button>
+        <button class="ghost" id="newBtn">Seriyi Yeniden Başlat</button>
+      </div>
+      <p id="brief" style="margin-top:18px">İpucu: kaynak ve kule sabit; diğer parçalar tıklayınca saat yönünde döner.</p>
+    </section>
+    <section class="board-wrap" aria-label="Sinyal bağlantı panosu">
+      <div id="board"></div>
+    </section>
+  </main>
+  <div id="toast"></div>
+  <script>
+    const W = 6, H = 6;
+    const dirs = [
+      { bit: 1, dx: 0, dy: -1, opposite: 4, arm: 'n' },
+      { bit: 2, dx: 1, dy: 0, opposite: 8, arm: 'e' },
+      { bit: 4, dx: 0, dy: 1, opposite: 1, arm: 's' },
+      { bit: 8, dx: -1, dy: 0, opposite: 2, arm: 'w' }
+    ];
+    const paths = [
+      [[0,2],[1,2],[2,2],[2,1],[3,1],[4,1],[4,2],[5,2]],
+      [[0,4],[1,4],[1,3],[2,3],[3,3],[3,2],[3,1],[4,1],[5,1]],
+      [[0,1],[1,1],[1,2],[1,3],[2,3],[3,3],[4,3],[4,4],[5,4]],
+      [[0,5],[0,4],[1,4],[2,4],[2,3],[2,2],[3,2],[4,2],[5,2]],
+      [[0,0],[1,0],[2,0],[2,1],[2,2],[3,2],[3,3],[4,3],[5,3]]
+    ];
+    const decoys = [3,5,6,9,10,12,14];
+    const board = document.getElementById('board');
+    const levelEl = document.getElementById('level');
+    const movesEl = document.getElementById('moves');
+    const scoreEl = document.getElementById('score');
+    const briefEl = document.getElementById('brief');
+    const toastEl = document.getElementById('toast');
+    let level = 0, moves = 0, score = 0, cells = [], source, target;
+
+    function key(x, y) { return y * W + x; }
+    function rotateMask(mask, times = 1) {
+      let out = mask;
+      for (let i = 0; i < times; i++) out = ((out << 1) & 15) | ((out & 8) >> 3);
+      return out;
+    }
+    function maskForPath(path, index) {
+      const [x, y] = path[index];
+      let mask = 0;
+      [[path[index - 1]], [path[index + 1]]].flat().forEach(p => {
+        if (!p) return;
+        const dx = p[0] - x, dy = p[1] - y;
+        const d = dirs.find(item => item.dx === dx && item.dy === dy);
+        if (d) mask |= d.bit;
+      });
+      return mask;
+    }
+    function buildLevel() {
+      moves = 0;
+      cells = Array.from({ length: W * H }, (_, i) => ({ mask: decoys[i % decoys.length], powered: false, path: false, lock: false }));
+      const path = paths[level % paths.length];
+      source = key(path[0][0], path[0][1]);
+      target = key(path[path.length - 1][0], path[path.length - 1][1]);
+      path.forEach((p, i) => {
+        const k = key(p[0], p[1]);
+        const base = maskForPath(path, i);
+        const spin = (i === 0 || i === path.length - 1) ? 0 : (1 + ((level + i * 2) % 3));
+        cells[k] = { mask: rotateMask(base, spin), solution: base, powered: false, path: true, lock: i === 0 || i === path.length - 1 };
+      });
+      render();
+      updatePower();
+      updateHud();
+    }
+    function render() {
+      board.innerHTML = '';
+      cells.forEach((cell, i) => {
+        const tile = document.createElement('button');
+        tile.className = 'tile' + (cell.lock ? ' lock' : '') + (i === source ? ' source' : '') + (i === target ? ' target' : '');
+        tile.setAttribute('aria-label', 'Sinyal parçası');
+        tile.innerHTML = pipeMarkup(cell.mask) + (i === source ? '<div class="mark">KAYNAK</div>' : i === target ? '<div class="mark">KULE</div>' : '');
+        tile.addEventListener('click', () => rotateTile(i));
+        board.appendChild(tile);
+      });
+    }
+    function pipeMarkup(mask) {
+      const arms = dirs.filter(d => mask & d.bit).map(d => `<span class="arm ${d.arm}"></span>`).join('');
+      return `<div class="pipe">${arms}</div>`;
+    }
+    function rotateTile(index) {
+      if (cells[index].lock) return;
+      cells[index].mask = rotateMask(cells[index].mask);
+      moves++;
+      const tile = board.children[index];
+      tile.innerHTML = pipeMarkup(cells[index].mask);
+      updatePower();
+      updateHud();
+      if (cells[target].powered) completeLevel();
+    }
+    function updatePower() {
+      cells.forEach(c => c.powered = false);
+      const queue = [source];
+      cells[source].powered = true;
+      while (queue.length) {
+        const current = queue.shift();
+        const x = current % W, y = Math.floor(current / W);
+        dirs.forEach(d => {
+          if (!(cells[current].mask & d.bit)) return;
+          const nx = x + d.dx, ny = y + d.dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
+          const n = key(nx, ny);
+          if ((cells[n].mask & d.opposite) && !cells[n].powered) {
+            cells[n].powered = true;
+            queue.push(n);
+          }
+        });
+      }
+      [...board.children].forEach((tile, i) => tile.classList.toggle('powered', cells[i].powered));
+    }
+    function completeLevel() {
+      const bonus = Math.max(40, 220 - moves * 9);
+      score += bonus;
+      show(`Düğüm ${level + 1} açıldı. +${bonus} skor`);
+      level++;
+      if (level >= paths.length) {
+        show(`Kule uyandı. Final skor: ${score}`);
+        briefEl.textContent = 'Bölüm 1 tamamlandı. Sinyal artık şehir dışına taşınabilir.';
+        level = 0;
+        score += 500;
+      }
+      setTimeout(buildLevel, 850);
+    }
+    function updateHud() {
+      levelEl.textContent = level + 1;
+      movesEl.textContent = moves;
+      scoreEl.textContent = score;
+    }
+    function show(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 1600);
+    }
+    document.getElementById('resetBtn').addEventListener('click', buildLevel);
+    document.getElementById('newBtn').addEventListener('click', () => { level = 0; score = 0; buildLevel(); });
+    buildLevel();
+  </script>
+</body>
+</html>

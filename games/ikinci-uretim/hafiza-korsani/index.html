@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Hafıza Korsanı</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #gameInfo {
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #levelDisplay {
+            font-size: 1.3rem;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+        }
+
+        #status {
+            font-size: 1rem;
+            color: #aaa;
+        }
+
+        #gridContainer {
+            display: grid;
+            gap: 15px;
+            padding: 20px;
+            max-width: 500px;
+            width: 90vw;
+            aspect-ratio: 1;
+        }
+
+        .node {
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+            position: relative;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .node:active {
+            transform: scale(0.95);
+        }
+
+        .node.lit {
+            transform: scale(1.05);
+            z-index: 2;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.3s;
+        }
+
+        #overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #overlay h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #f0f;
+            text-shadow: 0 0 30px #f0f;
+        }
+
+        #overlay p {
+            margin-bottom: 30px;
+            color: #aaa;
+            font-size: 1.1rem;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        #startBtn {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: transparent;
+            color: #0ff;
+            border: 2px solid #0ff;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-10px);
+            }
+
+            40% {
+                transform: translateX(10px);
+            }
+
+            60% {
+                transform: translateX(-10px);
+            }
+
+            80% {
+                transform: translateX(10px);
+            }
+        }
+
+        .shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes flashRed {
+
+            0%,
+            100% {
+                background: #000;
+            }
+
+            50% {
+                background: #300;
+            }
+        }
+
+        .flash {
+            animation: flashRed 0.4s ease-in-out;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameInfo">
+        <div id="levelDisplay">Seviye: 1</div>
+        <div id="status">Başlamak için düğmeye bas</div>
+    </div>
+    <div id="gridContainer"></div>
+
+    <div id="overlay">
+        <h1>HAFIZA KORSANI</h1>
+        <p>Siber-güvenlik düğümlerinin sırasını hafızanda tut ve tekrar et. Her seviye zorlaşır!</p>
+        <button id="startBtn">BAŞLA</button>
+    </div>
+
+    <script>
+        const gridContainer = document.getElementById('gridContainer');
+        const levelDisplay = document.getElementById('levelDisplay');
+        const statusEl = document.getElementById('status');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const NOTES = [
+            261.63, 329.63, 392.00, 493.88,
+            523.25, 659.25, 783.99, 880.00, 987.77
+        ];
+
+        const COLORS = [
+            '#ff0055', '#00ff55', '#0055ff', '#ffaa00',
+            '#aa00ff', '#00ffff', '#ff5500', '#55ff00', '#ff00aa'
+        ];
+
+        let level = 1;
+        let sequence = [];
+        let playerIndex = 0;
+        let isShowing = false;
+        let canClick = false;
+        let baseDelay = 800;
+        let nodes = [];
+
+        function getGridSize() {
+            if (level <= 2) return 2;
+            return 3;
+        }
+
+        function getNodeCount() {
+            if (level <= 2) return 4;
+            if (level <= 5) return 6;
+            return 9;
+        }
+
+        function createGrid() {
+            gridContainer.innerHTML = '';
+            nodes = [];
+            const size = getGridSize();
+            const count = getNodeCount();
+            gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+
+            for (let i = 0; i < count; i++) {
+                const node = document.createElement('div');
+                node.className = 'node';
+                node.dataset.index = i;
+                node.style.background = `radial-gradient(circle at 30% 30%, ${COLORS[i]}44, ${COLORS[i]}11)`;
+                node.style.borderColor = COLORS[i] + '44';
+                node.style.boxShadow = `0 0 10px ${COLORS[i]}22`;
+
+                node.addEventListener('mousedown', (e) => handleNodeClick(i, e));
+                node.addEventListener('touchstart', (e) => { e.preventDefault(); handleNodeClick(i, e); }, { passive: false });
+
+                gridContainer.appendChild(node);
+                nodes.push(node);
+            }
+        }
+
+        function playTone(index, duration = 0.3) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = NOTES[index % NOTES.length];
+
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function lightNode(index) {
+            const node = nodes[index];
+            if (!node) return;
+            const color = COLORS[index % COLORS.length];
+            node.style.background = `radial-gradient(circle at 30% 30%, ${color}, ${color}88)`;
+            node.style.borderColor = color;
+            node.style.boxShadow = `0 0 40px ${color}, inset 0 0 20px ${color}44`;
+            node.classList.add('lit');
+        }
+
+        function dimNode(index) {
+            const node = nodes[index];
+            if (!node) return;
+            const color = COLORS[index % COLORS.length];
+            node.style.background = `radial-gradient(circle at 30% 30%, ${color}44, ${color}11)`;
+            node.style.borderColor = color + '44';
+            node.style.boxShadow = `0 0 10px ${color}22`;
+            node.classList.remove('lit');
+        }
+
+        function screenShake() {
+            document.body.classList.add('shake', 'flash');
+            setTimeout(() => {
+                document.body.classList.remove('shake', 'flash');
+            }, 400);
+        }
+
+        async function showSequence() {
+            isShowing = true;
+            canClick = false;
+            statusEl.textContent = 'İzle...';
+            statusEl.style.color = '#ff0';
+
+            await new Promise(r => setTimeout(r, 500));
+
+            const speed = Math.max(300, baseDelay - (level * 40));
+
+            for (let i = 0; i < sequence.length; i++) {
+                const idx = sequence[i];
+                lightNode(idx);
+                playTone(idx, speed / 1000);
+                await new Promise(r => setTimeout(r, speed));
+                dimNode(idx);
+                await new Promise(r => setTimeout(r, speed * 0.3));
+            }
+
+            isShowing = false;
+            canClick = true;
+            statusEl.textContent = 'Sıranı! Tekrar et!';
+            statusEl.style.color = '#0f0';
+        }
+
+        function nextLevel() {
+            levelDisplay.textContent = `Seviye: ${level}`;
+            createGrid();
+            sequence.push(Math.floor(Math.random() * getNodeCount()));
+            playerIndex = 0;
+            setTimeout(showSequence, 500);
+        }
+
+        function handleNodeClick(index, e) {
+            e.preventDefault();
+            if (!canClick || isShowing) return;
+
+            initAudio();
+
+            lightNode(index);
+            playTone(index, 0.2);
+            setTimeout(() => dimNode(index), 200);
+
+            if (index === sequence[playerIndex]) {
+                playerIndex++;
+                if (playerIndex >= sequence.length) {
+                    canClick = false;
+                    statusEl.textContent = 'Mükemmel!';
+                    statusEl.style.color = '#0ff';
+                    setTimeout(() => {
+                        level++;
+                        nextLevel();
+                    }, 1000);
+                }
+            } else {
+                canClick = false;
+                statusEl.textContent = 'Yanlış! Oyun Bitti!';
+                statusEl.style.color = '#f00';
+                screenShake();
+                if (audioCtx) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                }
+                setTimeout(() => {
+                    level = 1;
+                    sequence = [];
+                    overlay.classList.remove('hidden');
+                }, 1500);
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            overlay.classList.add('hidden');
+            level = 1;
+            sequence = [];
+            nextLevel();
+        });
+
+        createGrid();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,304 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sinyal Kulesi II: Kaçış</title>
+  <style>
+    :root {
+      --night: #090b16;
+      --road: #121a2b;
+      --ink: #fff7df;
+      --muted: #a9b4c9;
+      --amber: #ffbf4d;
+      --blue: #55d6ff;
+      --red: #ff4f6d;
+      --lime: #9dff7a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      color: var(--ink);
+      font-family: 'Trebuchet MS', Verdana, sans-serif;
+      background:
+        radial-gradient(circle at 22% 18%, rgba(85,214,255,.2), transparent 24%),
+        radial-gradient(circle at 78% 70%, rgba(255,191,77,.16), transparent 28%),
+        linear-gradient(180deg, #080814, #101425 58%, #07080d);
+      touch-action: none;
+    }
+    #game { width: 100vw; height: 100vh; display: block; }
+    .hud {
+      position: fixed;
+      inset: 18px 18px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .panel {
+      padding: 13px 15px;
+      background: rgba(7, 10, 20, .68);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 16px 50px rgba(0,0,0,.24);
+    }
+    .title { text-transform: uppercase; letter-spacing: .2em; color: var(--amber); font-size: 12px; font-weight: 900; }
+    h1 { margin: 5px 0 0; font-size: clamp(24px, 4vw, 46px); line-height: 1; }
+    .meters { display: flex; gap: 8px; flex-wrap: wrap; justify-content: end; }
+    .chip { min-width: 94px; text-align: center; }
+    .chip b { display: block; font-size: 24px; color: var(--blue); }
+    .chip span { color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 4;
+      background: radial-gradient(circle, rgba(8,11,22,.45), rgba(8,11,22,.9));
+    }
+    .card {
+      width: min(560px, calc(100vw - 32px));
+      padding: 28px;
+      border-radius: 28px;
+      background: linear-gradient(145deg, rgba(18,26,43,.92), rgba(5,8,15,.9));
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow: 0 30px 90px rgba(0,0,0,.5);
+    }
+    .card p { color: var(--muted); line-height: 1.55; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 13px 19px;
+      font-weight: 900;
+      cursor: pointer;
+      color: #06101a;
+      background: linear-gradient(135deg, var(--amber), var(--blue));
+    }
+    .touch {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      display: none;
+      gap: 10px;
+      z-index: 5;
+    }
+    .touch button { width: 64px; height: 58px; padding: 0; background: rgba(255,255,255,.12); color: var(--ink); border: 1px solid rgba(255,255,255,.16); }
+    @media (max-width: 760px) {
+      .hud { inset: 10px; align-items: stretch; }
+      .panel { padding: 10px 11px; border-radius: 14px; }
+      .meters { max-width: 178px; }
+      .chip { min-width: 78px; }
+      .chip b { font-size: 19px; }
+      .touch { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <div class="panel">
+      <div class="title">Sinyal Kulesi Serisi / Bölüm 2</div>
+      <h1>Kaçış</h1>
+    </div>
+    <div class="meters">
+      <div class="panel chip"><b id="distance">0</b><span>Metre</span></div>
+      <div class="panel chip"><b id="frags">0</b><span>Parça</span></div>
+      <div class="panel chip"><b id="shield">100</b><span>Kalkan</span></div>
+    </div>
+  </div>
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <div class="title">Bölüm 2</div>
+      <h1>Sinyali Şehirden Çıkar</h1>
+      <p>Uyanan kule düşman tarayıcıları da çalıştırdı. Üç hat arasında geç, sinyal parçalarını topla ve çarpışmadan uzak terminale ulaş.</p>
+      <p><b>Kontrol:</b> Yukarı/aşağı ok veya W/S ile hat değiştir. Boşluk ile kısa faz atlaması yap. Mobilde sağ alttaki tuşları kullan.</p>
+      <button id="startBtn">Kaçışı Başlat</button>
+    </div>
+  </div>
+  <div class="touch" aria-label="Mobil kontroller">
+    <button id="upBtn">▲</button>
+    <button id="phaseBtn">Faz</button>
+    <button id="downBtn">▼</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const distanceEl = document.getElementById('distance');
+    const fragsEl = document.getElementById('frags');
+    const shieldEl = document.getElementById('shield');
+    const overlay = document.getElementById('overlay');
+    let w = 0, h = 0, lanes = [], running = false, last = 0, spawn = 0, fragSpawn = 0, shake = 0;
+    const player = { x: 130, lane: 1, y: 0, targetY: 0, shield: 100, phase: 0, cooldown: 0 };
+    let speed = 430, distance = 0, frags = 0, obstacles = [], fragments = [], particles = [];
+
+    function resize() {
+      w = canvas.width = window.innerWidth * devicePixelRatio;
+      h = canvas.height = window.innerHeight * devicePixelRatio;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      w = window.innerWidth; h = window.innerHeight;
+      lanes = [h * .44, h * .58, h * .72];
+      player.y = player.targetY = lanes[player.lane];
+    }
+    function reset() {
+      speed = 430; distance = 0; frags = 0; spawn = 0; fragSpawn = 0; shake = 0;
+      player.lane = 1; player.shield = 100; player.phase = 0; player.cooldown = 0; player.x = Math.max(92, w * .14); player.y = player.targetY = lanes[1];
+      obstacles = []; fragments = []; particles = [];
+      updateHud();
+    }
+    function start() {
+      resize(); reset(); running = true; overlay.style.display = 'none'; last = performance.now(); requestAnimationFrame(loop);
+    }
+    function changeLane(dir) {
+      if (!running) return;
+      player.lane = Math.max(0, Math.min(2, player.lane + dir));
+      player.targetY = lanes[player.lane];
+    }
+    function phase() {
+      if (!running || player.cooldown > 0) return;
+      player.phase = .65;
+      player.cooldown = 3.2;
+      burst(player.x, player.y, '#55d6ff', 18);
+    }
+    function loop(now) {
+      if (!running) return;
+      const dt = Math.min(.033, (now - last) / 1000); last = now;
+      update(dt); draw(); requestAnimationFrame(loop);
+    }
+    function update(dt) {
+      distance += dt * speed * .055;
+      speed += dt * 7;
+      player.y += (player.targetY - player.y) * Math.min(1, dt * 14);
+      player.phase = Math.max(0, player.phase - dt);
+      player.cooldown = Math.max(0, player.cooldown - dt);
+      spawn -= dt; fragSpawn -= dt; shake = Math.max(0, shake - dt * 18);
+      if (spawn <= 0) {
+        obstacles.push({ x: w + 90, lane: Math.floor(Math.random() * 3), r: 26 + Math.random() * 11, spin: Math.random() * 6 });
+        spawn = Math.max(.48, 1.1 - distance / 1400);
+      }
+      if (fragSpawn <= 0) {
+        const lane = Math.floor(Math.random() * 3);
+        fragments.push({ x: w + 80, lane, y: lanes[lane], r: 15, pulse: Math.random() * 6 });
+        fragSpawn = .75 + Math.random() * .75;
+      }
+      obstacles.forEach(o => { o.x -= speed * dt; o.spin += dt * 5; });
+      fragments.forEach(f => { f.x -= speed * dt * .92; f.pulse += dt * 6; });
+      particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+      particles = particles.filter(p => p.life > 0);
+      obstacles = obstacles.filter(o => o.x > -80);
+      fragments = fragments.filter(f => f.x > -80);
+      collectAndCollide();
+      updateHud();
+    }
+    function collectAndCollide() {
+      fragments.forEach(f => {
+        if (f.hit) return;
+        if (Math.abs(f.x - player.x) < 40 && Math.abs(f.y - player.y) < 38) {
+          f.hit = true; frags++; player.shield = Math.min(100, player.shield + 6); burst(f.x, f.y, '#9dff7a', 12);
+        }
+      });
+      fragments = fragments.filter(f => !f.hit);
+      obstacles.forEach(o => {
+        if (o.hit || player.phase > 0) return;
+        const oy = lanes[o.lane];
+        if (Math.abs(o.x - player.x) < o.r + 28 && Math.abs(oy - player.y) < o.r + 18) {
+          o.hit = true; player.shield -= 26; shake = 9; burst(player.x, player.y, '#ff4f6d', 22);
+          if (player.shield <= 0) gameOver(false);
+        }
+      });
+      obstacles = obstacles.filter(o => !o.hit);
+      if (distance >= 1800) gameOver(true);
+    }
+    function gameOver(win) {
+      running = false;
+      overlay.style.display = 'grid';
+      overlay.querySelector('.card').innerHTML = `<div class="title">${win ? 'Terminale ulaşıldı' : 'Kalkan çöktü'}</div><h1>${win ? 'Sinyal Kurtarıldı' : 'Kaçış Kesildi'}</h1><p>Mesafe: <b>${Math.floor(distance)}</b> metre, parça: <b>${frags}</b>. ${win ? 'Final yayını için yeterli veri toplandı.' : 'Daha çok parça toplayıp faz atlamasını kritik anlarda kullan.'}</p><button id="againBtn">Tekrar Dene</button>`;
+      document.getElementById('againBtn').addEventListener('click', start);
+    }
+    function burst(x, y, color, count) {
+      for (let i = 0; i < count; i++) particles.push({ x, y, vx: (Math.random() - .5) * 260, vy: (Math.random() - .5) * 220, life: .35 + Math.random() * .45, color });
+    }
+    function updateHud() {
+      distanceEl.textContent = Math.floor(distance);
+      fragsEl.textContent = frags;
+      shieldEl.textContent = Math.max(0, Math.floor(player.shield));
+    }
+    function draw() {
+      const sx = (Math.random() - .5) * shake;
+      const sy = (Math.random() - .5) * shake;
+      ctx.save(); ctx.translate(sx, sy);
+      ctx.clearRect(-20, -20, w + 40, h + 40);
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#090b16'); grad.addColorStop(.55, '#11182a'); grad.addColorStop(1, '#07080d');
+      ctx.fillStyle = grad; ctx.fillRect(-20, -20, w + 40, h + 40);
+      drawCity(); drawRoad(); drawFragments(); drawObstacles(); drawPlayer(); drawParticles(); ctx.restore();
+    }
+    function drawCity() {
+      ctx.fillStyle = 'rgba(85,214,255,.08)';
+      for (let i = 0; i < 28; i++) {
+        const x = (i * 97 - (distance * 1.8 % 97));
+        const bh = 40 + (i % 5) * 24;
+        ctx.fillRect(x, h * .25 - bh * .25, 38, bh);
+      }
+      ctx.strokeStyle = 'rgba(255,191,77,.16)'; ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath(); ctx.arc(w * .7, h * .22, 70 + i * 32 + (distance % 32), 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    function drawRoad() {
+      ctx.fillStyle = '#121a2b';
+      ctx.beginPath(); ctx.moveTo(0, h * .38); ctx.lineTo(w, h * .34); ctx.lineTo(w, h * .86); ctx.lineTo(0, h * .9); ctx.closePath(); ctx.fill();
+      lanes.forEach((y, i) => {
+        ctx.strokeStyle = i === player.lane ? 'rgba(85,214,255,.72)' : 'rgba(255,255,255,.14)';
+        ctx.setLineDash([24, 28]); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); ctx.setLineDash([]);
+      });
+    }
+    function drawPlayer() {
+      ctx.save(); ctx.translate(player.x, player.y);
+      if (player.phase > 0) { ctx.globalAlpha = .55 + Math.sin(performance.now() / 40) * .25; }
+      ctx.fillStyle = '#ffbf4d'; rounded(-34, -18, 68, 36, 16); ctx.fill();
+      ctx.fillStyle = '#55d6ff'; rounded(-10, -32, 28, 22, 8); ctx.fill();
+      ctx.fillStyle = '#07101a'; ctx.fillRect(18, -7, 24, 14);
+      ctx.strokeStyle = player.phase > 0 ? '#55d6ff' : '#fff7df'; ctx.lineWidth = 3; ctx.strokeRect(-28, -12, 18, 24);
+      ctx.restore();
+    }
+    function drawObstacles() {
+      obstacles.forEach(o => {
+        const y = lanes[o.lane]; ctx.save(); ctx.translate(o.x, y); ctx.rotate(o.spin);
+        ctx.fillStyle = '#ff4f6d'; ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); rounded(4, -8, o.r + 20, 16, 8); ctx.fill(); }
+        ctx.beginPath(); ctx.arc(0, 0, o.r * .62, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+      });
+    }
+    function drawFragments() {
+      fragments.forEach(f => {
+        const r = f.r + Math.sin(f.pulse) * 3;
+        ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.pulse * .3);
+        ctx.fillStyle = '#9dff7a'; ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r, 0); ctx.lineTo(0, r); ctx.lineTo(-r, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+      });
+    }
+    function drawParticles() {
+      particles.forEach(p => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3 + p.life * 5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; });
+    }
+    function rounded(x, y, rw, rh, rr) {
+      ctx.beginPath(); ctx.roundRect(x, y, rw, rh, rr);
+    }
+    window.addEventListener('resize', resize);
+    window.addEventListener('keydown', e => {
+      if (['ArrowUp','w','W'].includes(e.key)) changeLane(-1);
+      if (['ArrowDown','s','S'].includes(e.key)) changeLane(1);
+      if (e.code === 'Space') phase();
+    });
+    document.getElementById('startBtn').addEventListener('click', start);
+    document.getElementById('upBtn').addEventListener('click', () => changeLane(-1));
+    document.getElementById('downBtn').addEventListener('click', () => changeLane(1));
+    document.getElementById('phaseBtn').addEventListener('click', phase);
+    resize(); draw();
+  </script>
+</body>
+</html>

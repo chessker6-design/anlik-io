@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Şövalye</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;}
+canvas{display:block;touch-action:none;}
+#ui{position:fixed;top:0;left:0;right:0;pointer-events:none;padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;z-index:10;}
+#ui-left{display:flex;flex-direction:column;gap:4px;}
+#scoreEl{font:bold 22px 'Courier New',monospace;color:#0ff;text-shadow:0 0 10px #0ff;}
+#roundEl{font:bold 16px 'Courier New',monospace;color:#ff0;text-shadow:0 0 8px #ff0;}
+#waveEl{font:13px 'Courier New',monospace;color:#f0f;text-shadow:0 0 6px #f0f;}
+#hpEl{font:20px sans-serif;}
+#comboEl{position:fixed;top:50%;left:50%;transform:translate(-50%,-60px);font:bold 52px 'Courier New',monospace;color:#f0f;text-shadow:0 0 20px #f0f;pointer-events:none;transition:opacity 0.3s;opacity:0;white-space:nowrap;z-index:20;}
+#roundAnn{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font:bold 80px 'Courier New',monospace;color:#0ff;text-shadow:0 0 40px #0ff,0 0 80px #0ff;pointer-events:none;opacity:0;z-index:30;white-space:nowrap;}
+#overlay{position:fixed;inset:0;background:rgba(0,0,10,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:20px;}
+#overlay h1{font:bold clamp(32px,8vw,56px) 'Courier New',monospace;color:#0ff;text-shadow:0 0 20px #0ff,0 0 40px #0ff;margin-bottom:12px;text-align:center;}
+#overlay .sub{font:15px 'Courier New',monospace;color:#aaa;margin:4px 0;text-align:center;}
+#overlay .hint{font:13px 'Courier New',monospace;color:#0ff8;margin:3px 0;text-align:center;}
+#overlay button{margin-top:28px;padding:16px 48px;font:bold 20px 'Courier New',monospace;background:transparent;color:#0ff;border:2px solid #0ff;cursor:pointer;letter-spacing:3px;text-shadow:0 0 8px #0ff;box-shadow:0 0 20px #0ff4;-webkit-tap-highlight-color:transparent;}
+#joystick-area{position:fixed;bottom:0;left:0;right:0;height:180px;z-index:5;pointer-events:none;}
+#slash-btn{position:fixed;bottom:30px;right:30px;width:90px;height:90px;border-radius:50%;background:rgba(0,255,255,0.15);border:2px solid #0ff8;display:none;align-items:center;justify-content:center;font:bold 28px sans-serif;color:#0ff;text-shadow:0 0 10px #0ff;z-index:15;-webkit-tap-highlight-color:transparent;touch-action:none;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="ui-left">
+    <div id="scoreEl">SKOR: 0</div>
+    <div id="roundEl">ROUND 1</div>
+    <div id="waveEl">DALGA 1</div>
+  </div>
+  <div id="hpEl"></div>
+</div>
+<div id="comboEl"></div>
+<div id="roundAnn"></div>
+<div id="overlay">
+  <h1>⚔ NEON ŞÖVALYESİ</h1>
+  <p class="sub">🖥 Masaüstü: Fareye tıkla → DASH & SLASH</p>
+  <p class="sub">📱 Mobil: Ekrana dokun → DASH & SLASH</p>
+  <p class="hint">Peş peşe öldür → KOMBO & YAVAŞ-ÇEKİM</p>
+  <p class="hint">Her round daha zorlu düşmanlar!</p>
+  <button id="startBtn">BAŞLAT</button>
+</div>
+<div id="slash-btn" style="display:none;">⚔</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const isMobile=/Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent)||navigator.maxTouchPoints>0;
+
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize();
+window.addEventListener('resize',()=>{resize();if(state)state.W=canvas.width,state.H=canvas.height;});
+
+// ── Audio ──────────────────────────────────────────────
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function mkOsc(type,f0,f1,dur,vol,distort){
+  const o=AC.createOscillator(),g=AC.createGain();
+  let out=g;
+  if(distort){const d=AC.createWaveShaper();const c=new Float32Array(256);for(let i=0;i<256;i++)c[i]=Math.sign(i/128-1);d.curve=c;o.connect(d);d.connect(g);}
+  else o.connect(g);
+  g.connect(AC.destination);
+  o.type=type;o.frequency.setValueAtTime(f0,AC.currentTime);
+  if(f1)o.frequency.exponentialRampToValueAtTime(f1,AC.currentTime+dur);
+  g.gain.setValueAtTime(vol,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+  o.start();o.stop(AC.currentTime+dur);
+}
+const sfx={
+  swoosh:()=>mkOsc('sawtooth',900,180,0.14,0.25),
+  hit:()=>mkOsc('square',140,35,0.22,0.45,true),
+  combo:(n)=>mkOsc('sine',200*Math.pow(1.18,Math.min(n,12)),null,0.18,0.18),
+  death:()=>mkOsc('sawtooth',380,45,0.55,0.4),
+  roundWin:()=>{mkOsc('sine',523,1046,0.2,0.2);setTimeout(()=>mkOsc('sine',659,1318,0.2,0.2),220);setTimeout(()=>mkOsc('sine',784,1568,0.3,0.25),440);},
+  roundLose:()=>mkOsc('sawtooth',300,40,0.6,0.35),
+};
+
+// ── State ──────────────────────────────────────────────
+let state=null,running=false,animId=null;
+let pointer={x:0,y:0,down:false};
+
+// ── Round config ───────────────────────────────────────
+function getRoundConfig(round){
+  return{
+    enemiesPerWave: 4+round*2,
+    waves: 2+Math.floor(round/2),
+    enemySpeed: 1.0+round*0.18,
+    spawnRate: Math.max(40,110-round*8),
+    tankChance: Math.min(0.4, 0.05+round*0.04),
+    fastChance: Math.min(0.45, 0.15+round*0.03),
+    bossWave: round>=3,
+  };
+}
+
+function initState(round){
+  const W=canvas.width,H=canvas.height;
+  const cfg=getRoundConfig(round);
+  return{
+    W,H,round,
+    cfg,
+    wave:1,
+    waveEnemiesLeft:cfg.enemiesPerWave,
+    waveClearing:false,
+    player:{x:W/2,y:H/2,r:18,angle:0,
+      dashing:false,dashX:0,dashY:0,dashT:0,
+      slashing:false,slashAngle:0,slashT:0,
+      trail:[],invincible:0},
+    enemies:[],particles:[],slashTrail:[],
+    score:0,combo:0,comboTimer:0,
+    hp:5,shakeAmt:0,shakeTime:0,slowMo:1,
+    spawnTimer:cfg.spawnRate,
+    gameOver:false,roundOver:false,
+  };
+}
+
+// ── Input ──────────────────────────────────────────────
+function getCanvasXY(e){
+  const r=canvas.getBoundingClientRect();
+  return{x:e.clientX-r.left,y:e.clientY-r.top};
+}
+canvas.addEventListener('mousedown',e=>{
+  AC.resume();
+  const p=getCanvasXY(e);
+  pointer={x:p.x,y:p.y,down:true};
+  if(running&&state&&!state.gameOver&&!state.roundOver)doSlash(p.x,p.y);
+});
+canvas.addEventListener('mousemove',e=>{
+  const p=getCanvasXY(e);
+  pointer.x=p.x;pointer.y=p.y;
+});
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();AC.resume();
+  const t=e.touches[0],p=getCanvasXY(t);
+  pointer={x:p.x,y:p.y,down:true};
+  if(running&&state&&!state.gameOver&&!state.roundOver)doSlash(p.x,p.y);
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const t=e.touches[0],p=getCanvasXY(t);
+  pointer.x=p.x;pointer.y=p.y;
+},{passive:false});
+canvas.addEventListener('touchend',e=>{e.preventDefault();pointer.down=false;},{passive:false});
+
+function doSlash(tx,ty){
+  const pl=state.player;
+  if(pl.dashing)return;
+  const dx=tx-pl.x,dy=ty-pl.y,d=Math.sqrt(dx*dx+dy*dy);
+  if(d<4)return;
+  pl.dashX=dx/d;pl.dashY=dy/d;
+  pl.dashing=true;pl.dashT=0;
+  pl.slashing=true;pl.slashAngle=Math.atan2(dy,dx);pl.slashT=0;
+  state.slashTrail=[];
+  sfx.swoosh();
+}
+
+// ── Particles ──────────────────────────────────────────
+function burst(x,y,color,n,gravity=false){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,s=2+Math.random()*(gravity?10:6);
+    state.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-(gravity?3:0),
+      life:1,color,r:1.5+Math.random()*3.5,gravity:gravity?0.25:0});
+  }
+}
+
+// ── Spawn ──────────────────────────────────────────────
+function spawnEnemy(boss=false){
+  const{W,H,cfg}=state;
+  const side=Math.floor(Math.random()*4);
+  let x,y;
+  if(side===0){x=Math.random()*W;y=-35;}
+  else if(side===1){x=W+35;y=Math.random()*H;}
+  else if(side===2){x=Math.random()*W;y=H+35;}
+  else{x=-35;y=Math.random()*H;}
+  if(boss){
+    state.enemies.push({x,y,vx:0,vy:0,r:38,hp:12,maxHp:12,speed:cfg.enemySpeed*0.6,
+      color:'#f00',type:'boss',angle:0,hit:false,hitTimer:0});
+    return;
+  }
+  const rnd=Math.random();
+  const isTank=rnd<cfg.tankChance;
+  const isFast=!isTank&&rnd<cfg.tankChance+cfg.fastChance;
+  const type=isTank?'tank':isFast?'fast':'normal';
+  state.enemies.push({
+    x,y,vx:0,vy:0,
+    r:isTank?26:isFast?13:17,
+    hp:isTank?4:1,maxHp:isTank?4:1,
+    speed:cfg.enemySpeed*(isFast?2.2:isTank?0.7:1),
+    color:isTank?'#f80':isFast?'#0f8':'#f08',
+    type,angle:0,hit:false,hitTimer:0
+  });
+}
+
+// ── Update ─────────────────────────────────────────────
+function update(){
+  if(!running||!state||state.gameOver||state.roundOver)return;
+  const s=state,pl=s.player,sp=s.slowMo;
+
+  // Dash
+  if(pl.dashing){
+    pl.x+=pl.dashX*16;pl.y+=pl.dashY*16;
+    pl.trail.push({x:pl.x,y:pl.y,life:1});
+    pl.dashT++;
+    s.slashTrail.push({x:pl.x,y:pl.y});
+    if(pl.dashT>13)pl.dashing=false;
+  }
+  pl.trail=pl.trail.map(t=>({...t,life:t.life-0.12})).filter(t=>t.life>0);
+  pl.x=Math.max(pl.r,Math.min(s.W-pl.r,pl.x));
+  pl.y=Math.max(pl.r,Math.min(s.H-pl.r,pl.y));
+  if(pl.slashing){pl.slashT++;if(pl.slashT>20){pl.slashing=false;s.slashTrail=[];}}
+  pl.angle=Math.atan2(pointer.y-pl.y,pointer.x-pl.x);
+  if(pl.invincible>0)pl.invincible-=sp;
+
+  // Wave spawning
+  if(!s.waveClearing){
+    s.spawnTimer-=sp;
+    if(s.spawnTimer<=0&&s.waveEnemiesLeft>0){
+      const isBossWave=s.cfg.bossWave&&s.wave===s.cfg.waves;
+      if(isBossWave&&s.waveEnemiesLeft===s.cfg.enemiesPerWave){spawnEnemy(true);}
+      else spawnEnemy();
+      s.waveEnemiesLeft--;
+      s.spawnTimer=s.cfg.spawnRate;
+    }
+    if(s.waveEnemiesLeft<=0&&s.enemies.length===0)s.waveClearing=true;
+  }
+  if(s.waveClearing){
+    // short pause then next wave or round end
+    s.waveClearing=false;
+    if(s.wave<s.cfg.waves){
+      s.wave++;
+      s.waveEnemiesLeft=s.cfg.enemiesPerWave+(s.wave-1)*2;
+      s.spawnTimer=80;
+      document.getElementById('waveEl').textContent='DALGA '+s.wave;
+    } else {
+      // Round clear!
+      s.roundOver=true;
+      sfx.roundWin();
+      showRoundAnn('ROUND '+s.round+' TAMAMlANDI!',()=>showRoundScreen(s.round+1));
+      return;
+    }
+  }
+
+  // Enemies
+  for(let e of s.enemies){
+    const dx=pl.x-e.x,dy=pl.y-e.y,d=Math.sqrt(dx*dx+dy*dy);
+    e.vx+=(dx/d)*e.speed*0.18;e.vy+=(dy/d)*e.speed*0.18;
+    const spd2=Math.sqrt(e.vx*e.vx+e.vy*e.vy);
+    if(spd2>e.speed){e.vx*=e.speed/spd2;e.vy*=e.speed/spd2;}
+    e.x+=e.vx*sp;e.y+=e.vy*sp;
+    e.angle=Math.atan2(dy,dx);
+    if(e.hitTimer>0)e.hitTimer-=sp;
+
+    // Slash detection
+    if(pl.slashing&&e.hitTimer<=0){
+      const sdx=e.x-pl.x,sdy=e.y-pl.y,sd=Math.sqrt(sdx*sdx+sdy*sdy);
+      if(sd<90+e.r){
+        let diff=Math.abs(Math.atan2(sdy,sdx)-pl.slashAngle);
+        if(diff>Math.PI)diff=Math.PI*2-diff;
+        if(diff<Math.PI*0.65){
+          e.hp--;e.hitTimer=8;
+          burst(e.x,e.y,e.color,28,true);
+          sfx.hit();
+          s.shakeAmt=10;s.shakeTime=7;
+        }
+      }
+    }
+    // Player hit
+    if(d<pl.r+e.r-6&&pl.invincible<=0){
+      pl.invincible=90;s.hp--;
+      document.getElementById('hpEl').textContent='❤ '.repeat(Math.max(0,s.hp));
+      s.shakeAmt=22;s.shakeTime=14;s.combo=0;s.comboTimer=0;s.slowMo=1;
+      document.getElementById('comboEl').style.opacity='0';
+      burst(pl.x,pl.y,'#0ff',20);
+      if(s.hp<=0){s.gameOver=true;sfx.death();showGameOver();return;}
+    }
+  }
+
+  // Kill check
+  const killed=s.enemies.filter(e=>e.hp<=0);
+  s.enemies=s.enemies.filter(e=>e.hp>0);
+  for(let e of killed){
+    s.combo++;s.comboTimer=130;
+    s.score+=10*s.combo;
+    document.getElementById('scoreEl').textContent='SKOR: '+s.score;
+    sfx.combo(s.combo);
+    if(s.combo>1){
+      const el=document.getElementById('comboEl');
+      el.textContent=s.combo+'x KOMBO!';el.style.opacity='1';
+      el.style.fontSize=(42+Math.min(s.combo*4,30))+'px';
+    }
+    if(s.combo>=3)s.slowMo=0.42;
+    burst(e.x,e.y,e.color,e.type==='boss'?50:30,true);
+  }
+
+  // Combo timer
+  if(s.comboTimer>0){
+    s.comboTimer-=sp;
+    if(s.comboTimer<=0){s.combo=0;s.slowMo=1;document.getElementById('comboEl').style.opacity='0';}
+  }
+
+  // Particles
+  for(let p of s.particles){
+    p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;
+    p.vx*=0.91;p.vy*=0.91;p.life-=0.022;
+  }
+  s.particles=s.particles.filter(p=>p.life>0);
+  if(s.shakeTime>0){s.shakeTime-=sp;if(s.shakeTime<=0)s.shakeAmt=0;}
+}
+
+// ── Draw ───────────────────────────────────────────────
+function draw(){
+  const s=state;
+  const W=s?s.W:canvas.width,H=s?s.H:canvas.height;
+  ctx.save();
+  if(s&&s.shakeAmt>0)ctx.translate((Math.random()-.5)*s.shakeAmt,(Math.random()-.5)*s.shakeAmt);
+
+  // BG
+  ctx.fillStyle='#050510';ctx.fillRect(-60,-60,W+120,H+120);
+  ctx.strokeStyle='rgba(0,255,255,0.035)';ctx.lineWidth=1;
+  const gs=56;
+  for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  if(!s){ctx.restore();return;}
+
+  // Slash trail
+  const st=s.slashTrail;
+  if(st.length>1){
+    for(let i=1;i<st.length;i++){
+      const t=i/st.length;
+      ctx.strokeStyle=`hsla(${170+t*70},100%,65%,${t*0.85})`;
+      ctx.lineWidth=(1-t)*14+2;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(st[i-1].x,st[i-1].y);ctx.lineTo(st[i].x,st[i].y);ctx.stroke();
+    }
+  }
+
+  // Player trail
+  for(const t of s.player.trail){
+    ctx.beginPath();ctx.arc(t.x,t.y,s.player.r*t.life*0.65,0,Math.PI*2);
+    ctx.fillStyle=`rgba(0,255,255,${t.life*0.28})`;ctx.fill();
+  }
+
+  // Particles
+  for(const p of s.particles){
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);
+    const hex=Math.floor(p.life*255).toString(16).padStart(2,'0');
+    ctx.fillStyle=p.color+hex;ctx.fill();
+  }
+
+  // Enemies
+  for(const e of s.enemies){
+    const flash=e.hitTimer>0&&Math.floor(e.hitTimer)%2===0;
+    ctx.save();ctx.translate(e.x,e.y);ctx.rotate(e.angle);
+    ctx.shadowBlur=flash?30:14;ctx.shadowColor=flash?'#fff':e.color;
+    ctx.fillStyle=flash?'#fff':e.color;
+    if(e.type==='tank'){
+      ctx.fillRect(-e.r,-e.r,e.r*2,e.r*2);
+      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;ctx.strokeRect(-e.r,-e.r,e.r*2,e.r*2);
+    } else if(e.type==='fast'){
+      ctx.beginPath();ctx.moveTo(e.r,0);ctx.lineTo(-e.r,-e.r*.75);ctx.lineTo(-e.r*.4,0);ctx.lineTo(-e.r,e.r*.75);ctx.closePath();ctx.fill();
+    } else if(e.type==='boss'){
+      // Octagon boss
+      ctx.beginPath();
+      for(let i=0;i<8;i++){const a=i/8*Math.PI*2;ctx.lineTo(Math.cos(a)*e.r,Math.sin(a)*e.r);}
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    } else {
+      ctx.beginPath();ctx.arc(0,0,e.r,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1.5;ctx.stroke();
+    }
+    if(e.maxHp>1){
+      const bw=e.r*2+8;
+      ctx.fillStyle='#300';ctx.fillRect(-bw/2,-e.r-10,bw,6);
+      ctx.fillStyle=e.hp/e.maxHp>0.5?'#0f0':'#f80';
+      ctx.fillRect(-bw/2,-e.r-10,bw*(e.hp/e.maxHp),6);
+    }
+    ctx.shadowBlur=0;ctx.restore();
+  }
+
+  // Player
+  const pl=s.player;
+  const blink=pl.invincible>0&&Math.floor(pl.invincible/6)%2===1;
+  if(!blink){
+    ctx.save();ctx.translate(pl.x,pl.y);ctx.rotate(pl.angle);
+    ctx.shadowBlur=22;ctx.shadowColor='#0ff';
+    ctx.fillStyle='#0ff';
+    ctx.beginPath();ctx.moveTo(24,0);ctx.lineTo(-15,-13);ctx.lineTo(-9,0);ctx.lineTo(-15,13);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=pl.slashing?'#fff':'#08f';
+    ctx.lineWidth=pl.slashing?5:2.5;
+    ctx.shadowColor=pl.slashing?'#fff':'#08f';ctx.shadowBlur=pl.slashing?35:12;
+    ctx.beginPath();ctx.moveTo(10,-5);ctx.lineTo(56,0);ctx.lineTo(10,5);ctx.stroke();
+    ctx.shadowBlur=0;ctx.restore();
+  }
+
+  // Slow-mo vignette
+  if(s.slowMo<0.7){
+    const vg=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(80,0,80,0.35)');
+    ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  }
+  ctx.restore();
+}
+
+// ── Round announcement ─────────────────────────────────
+function showRoundAnn(text,cb){
+  const el=document.getElementById('roundAnn');
+  el.textContent=text;el.style.opacity='1';
+  el.style.fontSize=clampFont();
+  setTimeout(()=>{el.style.opacity='0';setTimeout(cb,400);},1800);
+}
+function clampFont(){return Math.min(80,canvas.width/10)+'px';}
+
+function showRoundScreen(nextRound){
+  running=false;
+  const ov=document.getElementById('overlay');
+  ov.innerHTML=`<h1>ROUND ${nextRound}</h1>
+    <p class="sub" style="color:#ff0;font-size:18px;margin-bottom:8px;">HAZIR OL!</p>
+    <p class="hint">Düşmanlar güçlendi 💀</p>
+    <p class="hint">Dalga: ${getRoundConfig(nextRound).waves} | Hız: +${Math.round(getRoundConfig(nextRound).enemySpeed*100-100)}%</p>
+    <button id="startBtn">DEVAM</button>`;
+  ov.style.display='flex';
+  document.getElementById('startBtn').addEventListener('click',()=>{
+    AC.resume();startRound(nextRound);
+  });
+}
+
+function showGameOver(){
+  running=false;
+  setTimeout(()=>{
+    const ov=document.getElementById('overlay');
+    ov.innerHTML=`<h1>GAME OVER</h1>
+      <p class="sub" style="color:#0ff;font-size:22px;">SKOR: ${state.score}</p>
+      <p class="hint">ROUND ${state.round} | DALGA ${state.wave}</p>
+      <button id="startBtn">TEKRAR OYNA</button>`;
+    ov.style.display='flex';
+    document.getElementById('startBtn').addEventListener('click',()=>{AC.resume();startRound(1);});
+  },700);
+}
+
+function startRound(round){
+  document.getElementById('overlay').style.display='none';
+  state=initState(round);
+  document.getElementById('scoreEl').textContent='SKOR: '+(state.score);
+  document.getElementById('roundEl').textContent='ROUND '+round;
+  document.getElementById('waveEl').textContent='DALGA 1';
+  document.getElementById('hpEl').textContent='❤ '.repeat(state.hp);
+  document.getElementById('comboEl').style.opacity='0';
+  // Show round announcement
+  showRoundAnn('ROUND '+round,()=>{running=true;});
+}
+
+// ── Loop ───────────────────────────────────────────────
+function loop(){
+  update();draw();
+  animId=requestAnimationFrame(loop);
+}
+
+document.getElementById('startBtn').addEventListener('click',()=>{
+  AC.resume();
+  startRound(1);
+  if(!animId)animId=requestAnimationFrame(loop);
+});
+// Idle draw
+requestAnimationFrame(function idle(){draw();if(!running)requestAnimationFrame(idle);});
+</script>
+</body>
+</html>

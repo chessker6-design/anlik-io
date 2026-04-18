@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Boyut Yolcusu</title>
+    <style>
+        :root {
+            --panel: rgba(10, 14, 24, .68);
+            --line: rgba(255, 255, 255, .1);
+            --text: #f6f8ff;
+            --muted: #acb8d8;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            background: radial-gradient(circle at 50% 18%, #112040 0%, #070b14 58%, #020306 100%);
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            color: var(--text);
+        }
+
+        #wrap {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            transition: filter .08s linear
+        }
+
+        #wrap.phase-b canvas {
+            filter: invert(1) hue-rotate(180deg)
+        }
+
+        #hud {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 12px
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 10px 12px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, .24)
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: 900
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.35
+        }
+
+        .status {
+            font-size: 13px;
+            font-weight: 800
+        }
+
+        .accent {
+            color: #a9dbff
+        }
+
+        #controls {
+            position: absolute;
+            inset: 0;
+            pointer-events: none
+        }
+
+        .btn {
+            position: absolute;
+            pointer-events: auto;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, .15);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, .26);
+            color: #fff;
+            font-weight: 900;
+            display: grid;
+            place-items: center
+        }
+
+        #jumpBtn {
+            right: 18px;
+            bottom: 24px;
+            width: min(28vw, 152px);
+            height: min(28vw, 152px);
+            background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .24), rgba(76, 178, 255, .38));
+            font-size: min(5vw, 26px)
+        }
+
+        #swapBtn {
+            right: min(32vw, 175px);
+            bottom: 52px;
+            width: min(18vw, 96px);
+            height: min(18vw, 96px);
+            background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .22), rgba(183, 111, 255, .42));
+            font-size: min(4.5vw, 22px)
+        }
+
+        .btn:active {
+            transform: scale(.96)
+        }
+
+        #center {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background: rgba(7, 10, 18, .46);
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 22px;
+            backdrop-filter: blur(8px);
+            padding: 18px 22px;
+            text-align: center;
+            opacity: 0;
+            transition: .25s ease;
+            min-width: min(88vw, 520px)
+        }
+
+        #center.show {
+            opacity: 1
+        }
+
+        #center h1 {
+            margin: 0 0 8px;
+            font-size: clamp(22px, 4vw, 38px)
+        }
+
+        #center p {
+            margin: 0;
+            color: #d8e0f3;
+            line-height: 1.4
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrap">
+        <canvas id="game"></canvas>
+
+        <div id="hud">
+            <div class="topbar">
+                <div class="panel">
+                    <div class="title">Boyut Yolcusu</div>
+                    <div class="small">Boşluk / ↑ / W = Zıpla · Shift / X = Boyut Değiştir · Mobilde butonlar</div>
+                </div>
+                <div class="panel">
+                    <div id="info" class="status">Boyut A · Mesafe: 0</div>
+                    <div id="subInfo" class="small">Bazı platformlar ve engeller sadece tek boyutta var.</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div id="swapBtn" class="btn">SWAP</div>
+            <div id="jumpBtn" class="btn">JUMP</div>
+        </div>
+
+        <div id="center">
+            <h1 id="centerTitle">Başla</h1>
+            <p id="centerText">Dokun ve koş. Platformdan düştükten sonra kısa bir süre daha zıplayabilirsin.</p>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const canvas = document.getElementById('game');
+            const ctx = canvas.getContext('2d');
+            const wrap = document.getElementById('wrap');
+            const jumpBtn = document.getElementById('jumpBtn');
+            const swapBtn = document.getElementById('swapBtn');
+            const info = document.getElementById('info');
+            const subInfo = document.getElementById('subInfo');
+            const center = document.getElementById('center');
+            const centerTitle = document.getElementById('centerTitle');
+            const centerText = document.getElementById('centerText');
+
+            const DPR = Math.min(window.devicePixelRatio || 1, 2);
+            const W = 1280, H = 720;
+            const view = { scale: 1, ox: 0, oy: 0, w: innerWidth, h: innerHeight };
+            const GROUND_Y = 620;
+            const CHUNK_W = 280;
+
+            const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+            const lerp = (a, b, t) => a + (b - a) * t;
+            const rand = (a, b) => a + Math.random() * (b - a);
+
+            function resize() {
+                view.w = innerWidth; view.h = innerHeight;
+                view.scale = Math.min(view.w / W, view.h / H);
+                view.ox = (view.w - W * view.scale) / 2;
+                view.oy = (view.h - H * view.scale) / 2;
+                canvas.width = Math.round(view.w * DPR);
+                canvas.height = Math.round(view.h * DPR);
+            }
+            addEventListener('resize', resize);
+            resize();
+
+            let audioCtx = null, master = null;
+            function ensureAudio() {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    master = audioCtx.createGain();
+                    master.gain.value = 0.23;
+                    master.connect(audioCtx.destination);
+                }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }
+            addEventListener('pointerdown', ensureAudio, { once: true });
+            addEventListener('keydown', ensureAudio, { once: true });
+
+            function tone(freq, dur, type = 'sine', vol = 0.08, when = 0) {
+                if (!audioCtx) return;
+                const t = audioCtx.currentTime + when;
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, t);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                o.connect(g).connect(master);
+                o.start(t); o.stop(t + dur + 0.03);
+            }
+            function noiseBurst(dur = 0.12, vol = 0.05, hp = 300, lp = 6000) {
+                if (!audioCtx) return;
+                const len = Math.floor(audioCtx.sampleRate * dur);
+                const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+                const src = audioCtx.createBufferSource();
+                src.buffer = buf;
+                const h = audioCtx.createBiquadFilter();
+                h.type = 'highpass'; h.frequency.value = hp;
+                const l = audioCtx.createBiquadFilter();
+                l.type = 'lowpass'; l.frequency.value = lp;
+                const g = audioCtx.createGain();
+                const t = audioCtx.currentTime;
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.linearRampToValueAtTime(vol, t + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                src.connect(h).connect(l).connect(g).connect(master);
+                src.start(t); src.stop(t + dur + 0.03);
+            }
+            function playWarp() {
+                noiseBurst(0.09, 0.06, 700, 7000);
+                tone(240, 0.12, 'sawtooth', 0.04, 0);
+                tone(520, 0.16, 'triangle', 0.05, 0.02);
+            }
+            function playJump() {
+                tone(320, 0.08, 'square', 0.05, 0);
+                tone(520, 0.12, 'triangle', 0.05, 0.02);
+            }
+            function playLand() {
+                tone(170, 0.05, 'triangle', 0.04, 0);
+                tone(110, 0.07, 'sine', 0.03, 0.02);
+            }
+            function playHit() {
+                tone(130, 0.18, 'sawtooth', 0.08, 0);
+                noiseBurst(0.06, 0.05, 800, 5000);
+            }
+
+            const input = {
+                keys: Object.create(null),
+                jumpPressed: false,
+                jumpHeld: false,
+                swapPressed: false
+            };
+
+            addEventListener('keydown', e => {
+                input.keys[e.code] = true;
+                if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
+                    if (!input.jumpHeld) input.jumpPressed = true;
+                    input.jumpHeld = true;
+                }
+                if (['ShiftLeft', 'ShiftRight', 'KeyX'].includes(e.code)) input.swapPressed = true;
+            });
+            addEventListener('keyup', e => {
+                input.keys[e.code] = false;
+                if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) input.jumpHeld = false;
+            });
+
+            jumpBtn.addEventListener('pointerdown', e => { jumpBtn.setPointerCapture(e.pointerId); input.jumpPressed = true; input.jumpHeld = true; });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => jumpBtn.addEventListener(t, () => input.jumpHeld = false));
+            swapBtn.addEventListener('pointerdown', e => { swapBtn.setPointerCapture(e.pointerId); input.swapPressed = true; });
+
+            const game = {
+                state: 'intro',
+                distance: 0,
+                speed: 320,
+                dim: 0,
+                chunks: [],
+                nextChunkX: 0,
+                particles: [],
+                best: Number(localStorage.getItem('dimension_runner_best') || 0)
+            };
+
+            const player = {
+                x: 220,
+                y: GROUND_Y - 34,
+                w: 40,
+                h: 58,
+                vy: 0,
+                grounded: false,
+                coyote: 0,
+                jumpBuffer: 0,
+                stretchX: 1,
+                stretchY: 1,
+                swapCd: 0
+            };
+
+            function showCenter(title, text) {
+                centerTitle.textContent = title;
+                centerText.textContent = text;
+                center.classList.add('show');
+            }
+            function hideCenter() { center.classList.remove('show'); }
+
+            function resetGame() {
+                game.state = 'playing';
+                game.distance = 0;
+                game.speed = 320;
+                game.dim = 0;
+                game.chunks = [];
+                game.nextChunkX = 0;
+                game.particles.length = 0;
+                player.y = GROUND_Y - player.h / 2;
+                player.vy = 0;
+                player.grounded = false;
+                player.coyote = 0;
+                player.jumpBuffer = 0;
+                player.stretchX = 1;
+                player.stretchY = 1;
+                player.swapCd = 0;
+                wrap.classList.remove('phase-b');
+                for (let i = 0; i < 10; i++) generateChunk();
+                hideCenter();
+                updateHud();
+            }
+
+            function addRect(arr, x, y, w, h) {
+                arr.push({ x, y, w, h });
+            }
+
+            function generateChunk() {
+                const x = game.nextChunkX;
+                game.nextChunkX += CHUNK_W;
+
+                const ch = { x, w: CHUNK_W, plats: [[], []], obs: [[], []] };
+                const type = Math.floor(Math.random() * 6);
+
+                if (type === 0) {
+                    addRect(ch.plats[0], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.obs[0], x + 170, GROUND_Y - 56, 40, 56);
+                } else if (type === 1) {
+                    addRect(ch.plats[0], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.obs[1], x + 160, GROUND_Y - 64, 46, 64);
+                } else if (type === 2) {
+                    addRect(ch.plats[0], x, GROUND_Y, 90, H - GROUND_Y + 80);
+                    addRect(ch.plats[0], x + 180, GROUND_Y, CHUNK_W - 180, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                } else if (type === 3) {
+                    addRect(ch.plats[1], x, GROUND_Y, 100, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x + 190, GROUND_Y, CHUNK_W - 190, H - GROUND_Y + 80);
+                    addRect(ch.plats[0], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                } else if (type === 4) {
+                    addRect(ch.plats[0], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.obs[0], x + 110, GROUND_Y - 36, 58, 36);
+                    addRect(ch.obs[1], x + 190, GROUND_Y - 80, 42, 80);
+                } else {
+                    addRect(ch.plats[0], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.plats[1], x, GROUND_Y, CHUNK_W, H - GROUND_Y + 80);
+                    addRect(ch.plats[0], x + 120, GROUND_Y - 105, 110, 16);
+                    addRect(ch.obs[1], x + 120, GROUND_Y - 54, 110, 54);
+                }
+
+                // Opening safety
+                if (x < 600) {
+                    ch.plats[0] = [{ x, y: GROUND_Y, w: CHUNK_W, h: H - GROUND_Y + 80 }];
+                    ch.plats[1] = [{ x, y: GROUND_Y, w: CHUNK_W, h: H - GROUND_Y + 80 }];
+                    ch.obs[0] = [];
+                    ch.obs[1] = [];
+                }
+
+                game.chunks.push(ch);
+            }
+
+            function spawnPortal(x, y) {
+                for (let i = 0; i < 18; i++) {
+                    const a = rand(0, Math.PI * 2);
+                    const sp = rand(80, 210);
+                    game.particles.push({
+                        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                        life: rand(0.22, 0.48), size: rand(3, 7), type: 'portal'
+                    });
+                }
+            }
+
+            function lose() {
+                if (game.state !== 'playing') return;
+                game.state = 'over';
+                game.best = Math.max(game.best, Math.floor(game.distance));
+                localStorage.setItem('dimension_runner_best', game.best);
+                playHit();
+                showCenter('BOYUT KIRILDI', 'Yeniden başlamak için dokun veya R tuşuna bas.');
+                updateHud();
+            }
+
+            function getRects(dim, kind, minX, maxX) {
+                const out = [];
+                for (const ch of game.chunks) {
+                    if (ch.x + ch.w < minX || ch.x > maxX) continue;
+                    out.push(...(kind === 'plat' ? ch.plats[dim] : ch.obs[dim]));
+                }
+                return out;
+            }
+
+            function overlaps(a, b) {
+                return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+            }
+
+            function updateHud() {
+                const label = game.dim === 0 ? 'A' : 'B';
+                if (game.state === 'playing') {
+                    info.innerHTML = `Boyut ${label} · Mesafe: <span class="accent">${Math.floor(game.distance)}</span>`;
+                    subInfo.textContent = `En iyi: ${game.best} · Hız: ${Math.floor(game.speed)}`;
+                } else if (game.state === 'over') {
+                    info.innerHTML = `Boyut ${label} · Mesafe: <span class="accent">${Math.floor(game.distance)}</span>`;
+                    subInfo.textContent = `En iyi: ${game.best}`;
+                }
+            }
+
+            function update(dt) {
+                if (game.state === 'intro' || game.state === 'over') {
+                    updateParticles(dt);
+                    return;
+                }
+
+                game.speed += dt * 5.5;
+                game.distance += game.speed * dt * 0.06;
+                const worldX = game.distance * 10 + player.x;
+                const camX = worldX - 240;
+
+                while (game.nextChunkX < worldX + 1600) generateChunk();
+                while (game.chunks.length && game.chunks[0].x + game.chunks[0].w < worldX - 500) game.chunks.shift();
+
+                player.swapCd = Math.max(0, player.swapCd - dt);
+                player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
+                if (input.jumpPressed) player.jumpBuffer = 0.12;
+
+                if (input.swapPressed && player.swapCd <= 0) {
+                    game.dim = 1 - game.dim;
+                    wrap.classList.toggle('phase-b', game.dim === 1);
+                    player.swapCd = 0.14;
+                    spawnPortal(player.x, player.y);
+                    playWarp();
+                }
+
+                if (player.grounded) player.coyote = 0.10;
+                else player.coyote = Math.max(0, player.coyote - dt);
+
+                if (player.jumpBuffer > 0 && (player.grounded || player.coyote > 0)) {
+                    player.vy = -700;
+                    player.grounded = false;
+                    player.coyote = 0;
+                    player.jumpBuffer = 0;
+                    player.stretchX = 1.18;
+                    player.stretchY = 0.82;
+                    playJump();
+                }
+
+                const prevBottom = player.y + player.h / 2;
+                const prevGrounded = player.grounded;
+                player.vy += 1850 * dt;
+                player.y += player.vy * dt;
+                player.grounded = false;
+
+                const plats = getRects(game.dim, 'plat', camX - 50, camX + W + 300);
+                const pWorldRect = { x: worldX - player.w / 2, y: player.y - player.h / 2, w: player.w, h: player.h };
+                let landed = false;
+
+                if (player.vy >= 0) {
+                    for (const plat of plats) {
+                        const withinX = pWorldRect.x + pWorldRect.w > plat.x + 4 && pWorldRect.x < plat.x + plat.w - 4;
+                        const nextBottom = player.y + player.h / 2;
+                        if (withinX && prevBottom <= plat.y && nextBottom >= plat.y) {
+                            player.y = plat.y - player.h / 2;
+                            player.vy = 0;
+                            player.grounded = true;
+                            landed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (landed && !prevGrounded) {
+                    player.stretchX = 0.82;
+                    player.stretchY = 1.16;
+                    playLand();
+                }
+
+                const obs = getRects(game.dim, 'obs', camX - 50, camX + W + 300);
+                pWorldRect.x = worldX - player.w / 2;
+                pWorldRect.y = player.y - player.h / 2;
+                for (const o of obs) {
+                    if (overlaps(pWorldRect, o)) { lose(); break; }
+                }
+
+                if (player.y - player.h / 2 > H + 120) lose();
+
+                player.stretchX = lerp(player.stretchX, 1, dt * 12);
+                player.stretchY = lerp(player.stretchY, 1, dt * 12);
+
+                updateParticles(dt);
+                updateHud();
+
+                input.jumpPressed = false;
+                input.swapPressed = false;
+            }
+
+            function updateParticles(dt) {
+                for (let i = game.particles.length - 1; i >= 0; i--) {
+                    const p = game.particles[i];
+                    p.life -= dt;
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.vx *= 0.96; p.vy *= 0.96;
+                    if (p.life <= 0) game.particles.splice(i, 1);
+                }
+            }
+
+            function drawRect(r, fill, alpha = 1) {
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = fill;
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+                ctx.globalAlpha = 1;
+            }
+
+            function renderWorld() {
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, '#7ec8ff');
+                bg.addColorStop(0.52, '#e8f7ff');
+                bg.addColorStop(1, '#d9f0ff');
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+
+                const worldX = game.distance * 10 + player.x;
+                const camX = worldX - 240;
+
+                // parallax
+                ctx.fillStyle = 'rgba(55,95,160,.14)';
+                for (let i = 0; i < 12; i++) {
+                    const x = ((i * 220 - camX * 0.25) % (W + 300)) - 80;
+                    ctx.beginPath();
+                    ctx.arc(x, 170 + (i % 3) * 30, 70 + (i % 4) * 18, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // back dimension ghost
+                const ghostDim = 1 - game.dim;
+                const ghostPlats = getRects(ghostDim, 'plat', camX - 50, camX + W + 300);
+                const ghostObs = getRects(ghostDim, 'obs', camX - 50, camX + W + 300);
+
+                ctx.save();
+                ctx.translate(-camX, 0);
+                for (const r of ghostPlats) drawRect(r, '#8e74ff', 0.16);
+                for (const r of ghostObs) drawRect(r, '#ff6a96', 0.14);
+                ctx.restore();
+
+                // active dimension
+                const plats = getRects(game.dim, 'plat', camX - 50, camX + W + 300);
+                const obs = getRects(game.dim, 'obs', camX - 50, camX + W + 300);
+
+                ctx.save();
+                ctx.translate(-camX, 0);
+
+                // ground / platforms
+                for (const r of plats) {
+                    const g = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+                    g.addColorStop(0, '#2f58b4');
+                    g.addColorStop(1, '#183064');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(r.x, r.y, r.w, r.h);
+
+                    ctx.fillStyle = 'rgba(255,255,255,.12)';
+                    ctx.fillRect(r.x, r.y, r.w, 6);
+                }
+
+                // obstacles
+                for (const r of obs) {
+                    const g = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+                    g.addColorStop(0, '#ff6886');
+                    g.addColorStop(1, '#9f1f3a');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(r.x, r.y, r.w, r.h);
+
+                    ctx.fillStyle = 'rgba(255,255,255,.16)';
+                    for (let y = r.y + 4; y < r.y + r.h; y += 12) ctx.fillRect(r.x, y, r.w, 3);
+                }
+
+                // particles
+                for (const p of game.particles) {
+                    if (p.type === 'portal') {
+                        ctx.fillStyle = `rgba(114,76,255,${clamp(p.life * 1.8, 0, 1)})`;
+                        ctx.beginPath();
+                        ctx.arc(p.x + camX, p.y, p.size * clamp(p.life * 2.2, 0, 1), 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                // player
+                ctx.save();
+                ctx.translate(worldX, player.y);
+                ctx.scale(player.stretchX, player.stretchY);
+                ctx.fillStyle = '#10213b';
+                ctx.fillRect(-player.w * 0.5, -player.h * 0.5, player.w, player.h);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(4, -10, 10, 10); // eye
+                ctx.fillStyle = '#42b7ff';
+                ctx.fillRect(-player.w * 0.5, player.h * 0.34, player.w, 8);
+                ctx.restore();
+
+                ctx.restore();
+
+                // horizon
+                ctx.fillStyle = 'rgba(255,255,255,.18)';
+                ctx.fillRect(0, GROUND_Y + 98, W, 3);
+
+                // warp flash ring
+                if (player.swapCd > 0.07) {
+                    ctx.strokeStyle = `rgba(140,90,255,${player.swapCd * 2.7})`;
+                    ctx.lineWidth = 10;
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y, 30 + (0.14 - player.swapCd) * 240, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // subtle vignette
+                const vg = ctx.createRadialGradient(W / 2, H / 2, 160, W / 2, H / 2, 760);
+                vg.addColorStop(0, 'rgba(0,0,0,0)');
+                vg.addColorStop(1, 'rgba(0,0,0,.35)');
+                ctx.fillStyle = vg;
+                ctx.fillRect(0, 0, W, H);
+
+                if (game.state === 'over') {
+                    ctx.fillStyle = 'rgba(255,60,90,.16)';
+                    ctx.fillRect(0, 0, W, H);
+                }
+            }
+
+            function render() {
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                ctx.clearRect(0, 0, view.w, view.h);
+                ctx.fillStyle = '#04060b';
+                ctx.fillRect(0, 0, view.w, view.h);
+                ctx.save();
+                ctx.translate(view.ox, view.oy);
+                ctx.scale(view.scale, view.scale);
+                renderWorld();
+                ctx.restore();
+            }
+
+            function startOrRestart() {
+                if (game.state === 'intro' || game.state === 'over') resetGame();
+            }
+
+            addEventListener('keydown', e => {
+                if (e.code === 'KeyR') startOrRestart();
+                if (game.state === 'intro' && (e.code === 'Space' || e.code === 'Enter')) startOrRestart();
+            });
+            wrap.addEventListener('pointerdown', () => { if (game.state === 'intro' || game.state === 'over') startOrRestart(); });
+
+            showCenter('Boyut Yolcusu', 'Başlamak için dokun. Swap ile renk paleti tersine döner ve harita değişir.');
+            let last = performance.now();
+            function loop(now) {
+                const dt = Math.min(0.033, (now - last) / 1000);
+                last = now;
+                update(dt);
+                render();
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        })();
+    </script>
+</body>
+
+</html>

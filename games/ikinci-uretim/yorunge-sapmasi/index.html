@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Yörünge Sapması</title>
+    <style>
+        body { margin: 0; background: #010103; overflow: hidden; font-family: 'Trebuchet MS', sans-serif; user-select: none; touch-action: none; -webkit-touch-callout: none; }
+        canvas { display: block; }
+        #ui { position: absolute; pointer-events: none; padding: 20px; color: #fff; width: 100%; box-sizing: border-box; z-index: 10; }
+        #score { font-size: 36px; font-weight: bold; color: #0df; text-shadow: 0 0 15px #0df; }
+        #multiplier { font-size: 48px; color: #f0f; text-shadow: 0 0 20px #f0f; margin-top: 5px; opacity: 0; transition: opacity 0.2s; font-weight: 900;}
+        .gameover { position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align: center; color: white; display:flex; flex-direction:column; align-items:center; z-index: 20; background: rgba(0,0,0,0.8); padding: 40px; border-radius: 10px; border: 1px solid #333; backdrop-filter: blur(5px); width: 90%; box-sizing: border-box;}
+        h1 { color: #f00; font-size: 50px; text-shadow: 0 0 20px #f00; margin: 0 0 30px 0; }
+        button { background: transparent; border: 2px solid #0df; color: #0df; padding: 15px 40px; font-size: 24px; cursor: pointer; border-radius: 8px; box-shadow: 0 0 15px #0df inset; text-shadow: 0 0 8px #0df; transition: 0.2s; -webkit-tap-highlight-color: transparent;}
+        button:hover, button:active { background: rgba(0, 221, 255, 0.2); transform: scale(1.05); }
+        #instr { color: #aaa; margin-top: 10px; font-size: 16px; }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 30px; margin: 0 0 20px 0;}
+            #score { font-size: 24px; }
+            #multiplier { font-size: 30px; }
+            button { padding: 10px 20px; font-size: 18px; }
+            #instr { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="score">Skor: 0</div>
+        <div id="multiplier">x1</div>
+        <div id="instr">Farenin/parmağın ters istikametinde itki uygulamak için basılı tut. Gezegenlerin kütle çekimini hızlanmak için kullan (Sapan Etkisi).</div>
+    </div>
+    <div class="gameover" id="goScreen">
+        <h1 id="menuTitle">YÖRÜNGE SAPMASI</h1>
+        <button onclick="restart()">GÖREVE BAŞLA</button>
+    </div>
+    <canvas id="c"></canvas>
+    
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w, h, mx=0, my=0, isDown = false;
+        let score=0, mult=1, frames=0, isOver = true;
+        let audioCtx, zoom = 1, targetZoom = 1;
+
+        function rsz() { w = c.width = window.innerWidth; h = c.height = window.innerHeight; }
+        window.addEventListener('resize', rsz); rsz();
+
+        const getPos = (e) => {
+            const rect = c.getBoundingClientRect();
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        };
+
+        ['mousedown', 'touchstart'].forEach(evt => c.addEventListener(evt, e => {
+            if(isOver) return;
+            isDown = true; 
+            let pos = getPos(e); mx = pos.x; my = pos.y; 
+            initAudio(); playEngine(true); 
+        }));
+        ['mousemove', 'touchmove'].forEach(evt => c.addEventListener(evt, e => {
+            if(isDown) { let pos = getPos(e); mx = pos.x; my = pos.y; }
+        }));
+        ['mouseup', 'touchend', 'mouseleave'].forEach(evt => c.addEventListener(evt, () => {
+            isDown = false; playEngine(false); 
+        }));
+
+        let engineOsc, engineGain, synthOsc, synthGain, crashPlaying=false;
+        function initAudio() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        function playEngine(on) {
+            if(!audioCtx) return;
+            if(on && (!engineOsc || engineGain.gain.value < 0.1)) {
+                try { if(engineOsc) engineOsc.stop(); } catch(e){}
+                engineOsc = audioCtx.createOscillator();
+                engineGain = audioCtx.createGain();
+                engineOsc.type = 'triangle';
+                
+                // create noise-like thrust sound
+                engineOsc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                engineGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                engineGain.gain.linearRampToValueAtTime(0.6, audioCtx.currentTime + 0.1);
+                
+                engineOsc.connect(engineGain);
+                engineGain.connect(audioCtx.destination);
+                engineOsc.start();
+                
+                // modulate frequency for flutter
+                setInterval(() => {
+                    if(isDown && engineOsc) engineOsc.frequency.setTargetAtTime(100 + Math.random()*50, audioCtx.currentTime, 0.05);
+                }, 50);
+            } else if(!on && engineOsc) {
+                engineGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                setTimeout(()=> { try { engineOsc.stop(); engineOsc=null; } catch(e){} }, 200);
+            }
+        }
+        function synthSound(intensity) {
+            if(!audioCtx) return;
+            if(!synthOsc) {
+                synthOsc = audioCtx.createOscillator();
+                synthGain = audioCtx.createGain();
+                synthOsc.connect(synthGain).connect(audioCtx.destination);
+                synthOsc.type='sine';
+                synthOsc.start();
+            }
+            if(intensity > 0) {
+                synthOsc.frequency.setTargetAtTime(200 + intensity * 600, audioCtx.currentTime, 0.1);
+                synthGain.gain.setTargetAtTime(0.3 + (intensity*0.2), audioCtx.currentTime, 0.1);
+            } else {
+                synthGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+            }
+        }
+        function playCrash() {
+            if(!audioCtx || crashPlaying) return;
+            crashPlaying = true;
+            let o = audioCtx.createOscillator();
+            let g = audioCtx.createGain();
+            o.type='square'; o.frequency.value = 150;
+            o.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime+1.5);
+            g.gain.value = 1; g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime+1.5);
+            o.connect(g).connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime+1.5);
+            playEngine(false);
+            if(synthOsc) synthGain.gain.value=0;
+        }
+
+        let ship, planets, particles, target;
+        function restart() {
+            initAudio();
+            isOver = false; crashPlaying = false; score=0; mult=1; frames=0; zoom = 1; targetZoom = 1;
+            document.getElementById('goScreen').style.display='none';
+            document.getElementById('instr').style.display='none';
+            document.getElementById('multiplier').style.opacity = '0';
+            
+            ship = {x: w*0.1, y: h/2, vx: 2, vy: 0, r: 8, angle: 0};
+            planets = []; particles = []; target = {x:w*0.9, y:Math.random()*h*0.8 + h*0.1, r:25};
+            
+            // Distribute planets safely
+            for(let i=0; i<5; i++) {
+                let px, py, valid=false, attempts=0;
+                while(!valid && attempts<50) {
+                    px = w*0.3 + Math.random()*w*0.5;
+                    py = h*0.1 + Math.random()*h*0.8;
+                    // check distance from ship & target
+                    if(Math.hypot(px-ship.x, py-ship.y)>200 && Math.hypot(px-target.x, py-target.y)>150) {
+                        valid=true;
+                    }
+                    attempts++;
+                }
+                planets.push({ x: px, y: py, r: 25 + Math.random()*25, g: 2000 + Math.random()*3000 });
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function createStars() {
+            ctx.fillStyle = '#010103'; ctx.fillRect(0,0,w,h);
+            ctx.fillStyle = '#fff';
+            for(let i=0; i<100; i++) {
+                ctx.globalAlpha = Math.random();
+                ctx.fillRect(Math.random()*w, Math.random()*h, Math.random()*2, Math.random()*2);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function loop() {
+            if(!isOver) {
+                frames++;
+                let speed = Math.hypot(ship.vx, ship.vy);
+                // FOV zoom out on high speeds
+                targetZoom = Math.max(0.6, 1 - (speed-4)*0.02);
+                zoom += (targetZoom - zoom) * 0.05;
+
+                // Thruster
+                if(isDown) {
+                    // Thrust OPPOSITE to vector from ship to mouse
+                    // Mouse is just coordinates. Vector ship -> mouse:
+                    let dx = mx - w/2; // Center screen assumed due to camera translation logic (actually we draw ship at center when zoomed or just screen space?)
+                    // Let's use simple logic: angle from ship to mouse
+                    let angle = Math.atan2(my - ship.y, mx - ship.x);
+                    ship.angle = angle + Math.PI; // ship points opposite to mouse
+                    let thrust = 0.15;
+                    ship.vx -= Math.cos(angle) * thrust;
+                    ship.vy -= Math.sin(angle) * thrust;
+                    
+                    // Fire particles (shooting towards mouse)
+                    for(let i=0; i<3; i++) {
+                        particles.push({
+                            x: ship.x, 
+                            y: ship.y,
+                            vx: Math.cos(angle)*(4+Math.random()*3) + ship.vx*0.5,
+                            vy: Math.sin(angle)*(4+Math.random()*3) + ship.vy*0.5,
+                            l: 1, c: `hsl(${Math.random()*40 + 10}, 100%, 50%)`
+                        });
+                    }
+                } else {
+                    ship.angle = Math.atan2(ship.vy, ship.vx); // forward
+                }
+
+                // Gravity & Planets
+                let inGravity = 0;
+                planets.forEach(p => {
+                    let dx = p.x - ship.x, dy = p.y - ship.y;
+                    let distsq = dx*dx + dy*dy;
+                    let dist = Math.sqrt(distsq);
+                    
+                    // Sling effect distance (gravity bounds)
+                    let influenceR = p.r * 6;
+                    if(dist < influenceR) {
+                        let intensity = (influenceR - dist)/influenceR;
+                        inGravity = Math.max(inGravity, intensity); // Use strongest gravity
+                        let f = p.g / distsq;
+                        ship.vx += (dx/dist) * f;
+                        ship.vy += (dy/dist) * f;
+                    }
+                    
+                    // Collision
+                    if(dist < ship.r + p.r) { isOver = true; playCrash(); }
+                });
+
+                if(inGravity > 0.05 && speed > 2) {
+                    mult = 1 + inGravity*10;
+                    document.getElementById('multiplier').style.opacity = '1';
+                    document.getElementById('multiplier').innerText = `x${mult.toFixed(1)}`;
+                    document.getElementById('multiplier').style.transform = `scale(${1 + inGravity*0.5})`;
+                    synthSound(inGravity);
+                    score += Math.floor(speed * mult * 0.1); // Add score continuously inside orbit
+                } else {
+                    mult = 1;
+                    document.getElementById('multiplier').style.opacity = '0';
+                    synthSound(0);
+                }
+
+                ship.x += ship.vx; ship.y += ship.vy;
+                
+                if(frames%10===0) document.getElementById('score').innerText = `Skor: ${Math.floor(score)}`;
+
+                // Target hit
+                let tx = target.x - ship.x, ty = target.y - ship.y;
+                if(Math.sqrt(tx*tx + ty*ty) < target.r + ship.r) {
+                    score += 5000;
+                    
+                    // New level setup
+                    target.x = w*0.1 + Math.random()*w*0.8;
+                    target.y = h*0.1 + Math.random()*h*0.8;
+                    
+                    planets.forEach(p => {
+                        let ok=false;
+                        while(!ok) {
+                            p.x = w*0.1 + Math.random()*w*0.8; 
+                            p.y = h*0.1 + Math.random()*h*0.8;
+                            if(Math.hypot(p.x-ship.x, p.y-ship.y)>150 && Math.hypot(p.x-target.x, p.y-target.y)>150) ok=true;
+                        }
+                    });
+                    
+                    // Success particles
+                    for(let i=0; i<50; i++) particles.push({
+                        x: ship.x, y: ship.y,
+                        vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
+                        l: 1, c: '#0f0'
+                    });
+                }
+
+                // Bounds handling - Bounce or Die? Let's bounce with damage
+                if(ship.x<0 || ship.x>w || ship.y<0 || ship.y>h) { 
+                    isOver = true; playCrash(); 
+                }
+            }
+
+            // --- DRAWING ---
+            ctx.fillStyle = 'rgba(1,1,3,0.3)'; // soft clear for trails
+            ctx.fillRect(0,0,w,h);
+            
+            ctx.save();
+            if(!isOver) {
+                // Focus camera on ship if zoomed
+                ctx.translate(w/2, h/2);
+                ctx.scale(zoom, zoom);
+                // Center around ship slightly
+                ctx.translate(-ship.x * 0.5 - w/4, -ship.y * 0.5 - h/4);
+            }
+
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Target
+            ctx.beginPath(); ctx.arc(target.x, target.y, target.r + Math.sin(frames*0.1)*5, 0, 7);
+            ctx.fillStyle = '#0f0'; ctx.shadowBlur = 20; ctx.shadowColor = '#0f0'; ctx.fill();
+
+            // Planets
+            planets.forEach(p => {
+                // Gravity Ring
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r*6, 0, 7);
+                ctx.strokeStyle = `rgba(0, 255, 255, ${0.1 + Math.sin(frames*0.05)*0.05})`; ctx.lineWidth=2; ctx.stroke();
+                
+                // Core
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7);
+                ctx.shadowColor = '#0df'; ctx.shadowBlur = 20;
+                ctx.fillStyle = '#050510'; ctx.fill(); ctx.strokeStyle='#0df'; ctx.lineWidth=3; ctx.stroke();
+            });
+
+            // Particles
+            particles.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.l*5 + 1, 0, 7);
+                ctx.fillStyle = p.c; ctx.shadowBlur = 10; ctx.shadowColor = p.c; 
+                ctx.fill();
+                p.x += p.vx; p.y += p.vy; p.l -= 0.03;
+            });
+            particles = particles.filter(p=>p.l>0);
+
+            // Ship
+            if(!isOver) {
+                ctx.shadowColor = '#fff'; ctx.shadowBlur = 15;
+                ctx.translate(ship.x, ship.y);
+                ctx.rotate(ship.angle);
+                ctx.beginPath();
+                ctx.moveTo(12, 0); ctx.lineTo(-10, 8); ctx.lineTo(-6, 0); ctx.lineTo(-10, -8); ctx.closePath();
+                ctx.fillStyle = '#fff'; ctx.fill();
+                ctx.translate(-ship.x, -ship.y);
+            } else if(frames > 0) {
+                for(let i=0; i<15; i++) particles.push({x:ship.x, y:ship.y, vx:(Math.random()-0.5)*15, vy:(Math.random()-0.5)*15, l:1, c:'#f00'});
+                document.getElementById('goScreen').style.display='flex';
+                document.getElementById('menuTitle').innerText = 'MODÜL PARÇALANDI';
+                document.getElementById('menuTitle').style.color = '#f00';
+            }
+
+            ctx.restore();
+            requestAnimationFrame(loop);
+        }
+        
+        createStars();
+    </script>
+</body>
+</html>

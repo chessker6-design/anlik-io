@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Lazer Ağı</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background: #050510;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1;
+            margin-top: 10px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #0a0a1a;
+            border: 2px solid #1a1a3a;
+            border-radius: 8px;
+        }
+
+        #ui {
+            width: 100%;
+            max-width: 600px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #levelInfo {
+            font-size: 1.2rem;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+        }
+
+        button {
+            background: #1a1a3a;
+            color: #0ff;
+            border: 1px solid #0ff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        button:active {
+            background: #0ff;
+            color: #000;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            color: #0f0;
+            text-shadow: 0 0 20px #0f0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <div id="levelInfo">Seviye: 1</div>
+        <button id="resetBtn">Sıfırla</button>
+    </div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="message"></div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const levelInfo = document.getElementById('levelInfo');
+        const message = document.getElementById('message');
+        const resetBtn = document.getElementById('resetBtn');
+
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playClick() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        function playChime() {
+            if (!audioCtx) return;
+            [523.25, 659.25, 783.99].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.1);
+                gain.gain.setValueAtTime(0, audioCtx.currentTime + i * 0.1);
+                gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + i * 0.1 + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.1 + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + i * 0.1);
+                osc.stop(audioCtx.currentTime + i * 0.1 + 0.4);
+            });
+        }
+
+        const COLS = 8;
+        const ROWS = 8;
+        let cellSize = 0;
+        let grid = [];
+        let level = 1;
+        let laserPath = [];
+        let targetReached = false;
+
+        const DIR = { RIGHT: { x: 1, y: 0 }, LEFT: { x: -1, y: 0 }, UP: { x: 0, y: -1 }, DOWN: { x: 0, y: 1 } };
+
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            cellSize = Math.min(canvas.width / COLS, canvas.height / ROWS);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Cell {
+            constructor(type, mirrorType = null) {
+                this.type = type;
+                this.mirrorType = mirrorType;
+            }
+            toggle() {
+                if (this.type === 'mirror') {
+                    this.mirrorType = this.mirrorType === '/' ? '\\' : '/';
+                    playClick();
+                    solveLaser();
+                }
+            }
+        }
+
+        function createGrid() {
+            grid = [];
+            for (let y = 0; y < ROWS; y++) {
+                const row = [];
+                for (let x = 0; x < COLS; x++) {
+                    row.push(new Cell('empty'));
+                }
+                grid.push(row);
+            }
+        }
+
+        function reflect(dir, mirrorType) {
+            const { x, y } = dir;
+            if (mirrorType === '/') {
+                return { x: -y, y: -x };
+            } else {
+                return { x: y, y: x };
+            }
+        }
+
+        function traceLaser() {
+            let sx = -1, sy = -1;
+            let dir = { ...DIR.RIGHT };
+
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (grid[y][x].type === 'source') {
+                        sx = x; sy = y;
+                    }
+                }
+            }
+
+            if (sx === -1) return { path: [], success: false };
+
+            let x = sx, y = sy;
+            const path = [{ x, y }];
+            const visited = new Set();
+
+            while (true) {
+                const key = `${x},${y},${dir.x},${dir.y}`;
+                if (visited.has(key)) break;
+                visited.add(key);
+
+                x += dir.x;
+                y += dir.y;
+
+                if (x < 0 || x >= COLS || y < 0 || y >= ROWS) break;
+
+                path.push({ x, y });
+
+                const cell = grid[y][x];
+                if (cell.type === 'target') {
+                    return { path, success: true };
+                }
+                if (cell.type === 'wall') {
+                    break;
+                }
+                if (cell.type === 'mirror') {
+                    dir = reflect(dir, cell.mirrorType);
+                }
+            }
+
+            return { path, success: false };
+        }
+
+        function generateLevel(lvl) {
+            createGrid();
+            const mirrorCount = Math.min(4 + Math.floor(lvl / 2), 18);
+
+            const sourcePos = { x: 0, y: Math.floor(Math.random() * ROWS) };
+            const targetPos = { x: COLS - 1, y: Math.floor(Math.random() * ROWS) };
+
+            grid[sourcePos.y][sourcePos.x] = new Cell('source');
+            grid[targetPos.y][targetPos.x] = new Cell('target');
+
+            let attempts = 0;
+            let placed = 0;
+            while (placed < mirrorCount && attempts < 1000) {
+                const x = Math.floor(Math.random() * COLS);
+                const y = Math.floor(Math.random() * ROWS);
+                if (grid[y][x].type === 'empty') {
+                    const mType = Math.random() > 0.5 ? '/' : '\\';
+                    grid[y][x] = new Cell('mirror', mType);
+                    placed++;
+                }
+                attempts++;
+            }
+
+            if (!traceLaser().success) {
+                return generateLevel(lvl);
+            }
+
+            solveLaser();
+        }
+
+        function solveLaser() {
+            const result = traceLaser();
+            laserPath = result.path;
+            targetReached = result.success;
+
+            if (targetReached) {
+                playChime();
+                showMessage('Hedefe Ulaşıldı!');
+                setTimeout(() => {
+                    level++;
+                    levelInfo.textContent = `Seviye: ${level}`;
+                    generateLevel(level);
+                    showMessage('');
+                }, 1500);
+            }
+        }
+
+        function showMessage(text) {
+            message.textContent = text;
+            message.style.opacity = text ? '1' : '0';
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const offsetX = (canvas.width - COLS * cellSize) / 2;
+            const offsetY = (canvas.height - ROWS * cellSize) / 2;
+
+            ctx.strokeStyle = '#1a1a3a';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(offsetX + i * cellSize, offsetY);
+                ctx.lineTo(offsetX + i * cellSize, offsetY + ROWS * cellSize);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(offsetX, offsetY + i * cellSize);
+                ctx.lineTo(offsetX + COLS * cellSize, offsetY + i * cellSize);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    const cx = offsetX + x * cellSize + cellSize / 2;
+                    const cy = offsetY + y * cellSize + cellSize / 2;
+                    const cell = grid[y][x];
+
+                    if (cell.type === 'source') {
+                        ctx.fillStyle = '#0ff';
+                        ctx.shadowColor = '#0ff';
+                        ctx.shadowBlur = 20;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, cellSize * 0.25, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    } else if (cell.type === 'target') {
+                        const pulse = targetReached ? 1.2 + Math.sin(Date.now() / 100) * 0.2 : 1;
+                        ctx.fillStyle = targetReached ? '#0f0' : '#f00';
+                        ctx.shadowColor = targetReached ? '#0f0' : '#f00';
+                        ctx.shadowBlur = targetReached ? 30 : 10;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, cellSize * 0.25 * pulse, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    } else if (cell.type === 'mirror') {
+                        ctx.strokeStyle = '#88f';
+                        ctx.lineWidth = 3;
+                        ctx.shadowColor = '#88f';
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        if (cell.mirrorType === '/') {
+                            ctx.moveTo(offsetX + x * cellSize + cellSize * 0.2, offsetY + y * cellSize + cellSize * 0.8);
+                            ctx.lineTo(offsetX + x * cellSize + cellSize * 0.8, offsetY + y * cellSize + cellSize * 0.2);
+                        } else {
+                            ctx.moveTo(offsetX + x * cellSize + cellSize * 0.2, offsetY + y * cellSize + cellSize * 0.2);
+                            ctx.lineTo(offsetX + x * cellSize + cellSize * 0.8, offsetY + y * cellSize + cellSize * 0.8);
+                        }
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+            }
+
+            if (laserPath.length > 1) {
+                ctx.strokeStyle = targetReached ? '#0f0' : '#f0f';
+                ctx.lineWidth = 4;
+                ctx.shadowColor = targetReached ? '#0f0' : '#f0f';
+                ctx.shadowBlur = 15;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+
+                const first = laserPath[0];
+                ctx.moveTo(offsetX + first.x * cellSize + cellSize / 2, offsetY + first.y * cellSize + cellSize / 2);
+
+                for (let i = 1; i < laserPath.length; i++) {
+                    const p = laserPath[i];
+                    ctx.lineTo(offsetX + p.x * cellSize + cellSize / 2, offsetY + p.y * cellSize + cellSize / 2);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        function getCellFromEvent(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const offsetX = (canvas.width - COLS * cellSize) / 2;
+            const offsetY = (canvas.height - ROWS * cellSize) / 2;
+
+            const col = Math.floor((x - offsetX) / cellSize);
+            const row = Math.floor((y - offsetY) / cellSize);
+
+            if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+                return { x: col, y: row };
+            }
+            return null;
+        }
+
+        function handleInput(e) {
+            e.preventDefault();
+            initAudio();
+            const cell = getCellFromEvent(e);
+            if (cell) {
+                const c = grid[cell.y][cell.x];
+                if (c.type === 'mirror') {
+                    c.toggle();
+                }
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleInput);
+        canvas.addEventListener('touchstart', handleInput, { passive: false });
+
+        resetBtn.addEventListener('click', () => {
+            initAudio();
+            level = 1;
+            levelInfo.textContent = `Seviye: ${level}`;
+            generateLevel(level);
+        });
+
+        generateLevel(1);
+        draw();
+    </script>
+</body>
+
+</html>
