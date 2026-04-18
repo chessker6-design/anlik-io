@@ -13,6 +13,27 @@ const categoryChips = document.querySelectorAll(".category-chip");
 let allGames = [];
 let currentCategory = "all";
 
+/* ── Kategori → Renk Eşleştirmesi ── */
+const CATEGORY_COLORS = {
+    "aksiyon":   { bg: "rgba(239, 68, 68, 0.25)",  border: "rgba(239, 68, 68, 0.5)",  text: "#fca5a5" },
+    "zeka":      { bg: "rgba(168, 85, 247, 0.25)", border: "rgba(168, 85, 247, 0.5)", text: "#d8b4fe" },
+    "arcade":    { bg: "rgba(34, 211, 238, 0.25)", border: "rgba(34, 211, 238, 0.5)", text: "#a5f3fc" },
+    "yarış":     { bg: "rgba(251, 191, 36, 0.25)", border: "rgba(251, 191, 36, 0.5)", text: "#fde68a" },
+    "strateji":  { bg: "rgba(52, 211, 153, 0.25)", border: "rgba(52, 211, 153, 0.5)", text: "#a7f3d0" },
+    "macera":    { bg: "rgba(96, 165, 250, 0.25)", border: "rgba(96, 165, 250, 0.5)", text: "#bfdbfe" },
+    "spor":      { bg: "rgba(251, 146, 60, 0.25)", border: "rgba(251, 146, 60, 0.5)", text: "#fed7aa" },
+    "rpg":       { bg: "rgba(232, 121, 249, 0.25)",border: "rgba(232, 121, 249, 0.5)",text: "#f0abfc" },
+    "refleks":   { bg: "rgba(250, 204, 21, 0.25)", border: "rgba(250, 204, 21, 0.5)", text: "#fef08a" },
+    "hayatta kalma": { bg: "rgba(74, 222, 128, 0.25)", border: "rgba(74, 222, 128, 0.5)", text: "#bbf7d0" },
+};
+
+const DEFAULT_COLOR = { bg: "rgba(255,255,255,0.1)", border: "transparent", text: "#aaaaaa" };
+
+function getCategoryColor(category) {
+    const key = (category || "").toLocaleLowerCase("tr-TR").trim();
+    return CATEGORY_COLORS[key] || DEFAULT_COLOR;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     init();
 });
@@ -87,14 +108,13 @@ async function loadGames() {
         let rawGames = Array.isArray(rawData) ? rawData : (rawData.games || []);
         
         allGames = rawGames.map(game => {
-            // Gerçekçi Placeholder Görsel Desteği (picsum.photos)
-            const seed = game.id || game.slug || Math.random().toString(36).substring(7);
-            const fallbackImage = `https://picsum.photos/seed/${seed}/400/500`;
+            // Hem Türkçe hem İngilizce anahtar desteği
+            const id = game.id || game.slug || Math.random().toString(36).substring(7);
             return {
-                id: game.id || game.slug || "unknown",
-                title: game.title || "İsimsiz Oyun",
-                category: game.category || "Oyun",
-                image: game.image || game.cover || fallbackImage,
+                id: id,
+                title: game.title || game.isim || "Bilinmeyen Oyun",
+                category: game.category || game.kategori || "Genel",
+                image: game.image || game.resim || game.cover || `https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400&h=500&fit=crop&q=80`,
             };
         });
 
@@ -121,17 +141,19 @@ function renderGames(games) {
 
     const fragment = document.createDocumentFragment();
 
-    games.forEach(game => {
+    games.forEach((game, index) => {
         const gameUrl = `./games/${game.id}/game.html`;
+        const color = getCategoryColor(game.category);
         
         const card = document.createElement("a");
         card.href = gameUrl;
         card.className = "big-game-card";
+        card.style.animationDelay = `${index * 60}ms`;
         
         card.innerHTML = `
             <img src="${game.image}" alt="${game.title}" loading="lazy">
             <div class="game-info">
-                <div class="game-category">${game.category}</div>
+                <div class="game-category" style="background:${color.bg}; border: 1px solid ${color.border}; color:${color.text};">${game.category}</div>
                 <div class="game-title">${game.title}</div>
             </div>
         `;
