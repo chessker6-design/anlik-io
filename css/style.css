@@ -176,3 +176,163 @@ footer p { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
     .game-category { font-size: 0.6rem; padding: 2px 6px; margin-bottom: 0.25rem; }
     .category-chip { font-size: 0.8rem; padding: 0.4rem 1rem; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   App Store – Oyun Detay Overlay
+   ═══════════════════════════════════════════════════════ */
+
+/* Backdrop & Container */
+.detail-overlay {
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.detail-overlay.open {
+    opacity: 1; visibility: visible;
+}
+
+/* İçerik Paneli – alttan kayar */
+.detail-content {
+    position: relative;
+    width: 100%; max-width: 680px;
+    max-height: 92vh;
+    background: var(--bg-secondary);
+    border-radius: 20px 20px 0 0;
+    padding: 16px 24px 40px;
+    overflow-y: auto; overflow-x: hidden;
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(.32,.72,.24,1.02);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+.detail-content::-webkit-scrollbar { width: 6px; }
+.detail-content::-webkit-scrollbar-track { background: transparent; }
+.detail-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.detail-overlay.open .detail-content {
+    transform: translateY(0);
+}
+
+/* Drag Göstergesi (swipe bar) */
+.drag-indicator {
+    width: 40px; height: 5px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 99px;
+    margin: 0 auto 16px;
+    cursor: grab;
+}
+
+/* Kapat Butonu */
+.close-btn {
+    position: absolute; top: 14px; right: 18px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary); font-size: 1.2rem;
+    cursor: pointer; display: grid; place-items: center;
+    transition: var(--transition);
+    z-index: 5;
+}
+.close-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+/* Header – İkon + Başlık */
+.detail-header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 18px;
+}
+.detail-icon {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    object-fit: cover;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.detail-title-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.detail-title {
+    font-size: 1.35rem; font-weight: 700;
+    letter-spacing: -0.3px; line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin: 0;
+}
+.detail-category {
+    display: inline-block;
+    padding: 3px 10px; border-radius: 6px;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(6px);
+    align-self: flex-start;
+}
+
+/* HEMEN OYNA Butonu */
+.detail-play-btn {
+    display: block; width: 100%; padding: 14px 0;
+    text-align: center; text-decoration: none;
+    font-family: var(--font); font-weight: 700; font-size: 1rem;
+    letter-spacing: 0.6px;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 14px;
+    margin-bottom: 24px;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+}
+.detail-play-btn:hover {
+    background: #818cf8;
+    transform: scale(1.01);
+    box-shadow: 0 6px 28px rgba(99, 102, 241, 0.5);
+}
+.detail-play-btn:active { transform: scale(0.98); }
+
+/* Galeri – Yatay Kaydırılabilir */
+.detail-gallery {
+    display: flex; gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    margin-bottom: 28px;
+    scrollbar-width: none;
+}
+.detail-gallery::-webkit-scrollbar { display: none; }
+.gallery-img {
+    flex: 0 0 85%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    object-fit: cover;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    scroll-snap-align: start;
+}
+
+/* Açıklama Bölümleri */
+.detail-section {
+    margin-bottom: 24px;
+}
+.detail-section h3 {
+    font-size: 1.05rem; font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    letter-spacing: -0.2px;
+}
+.detail-text {
+    font-size: 0.9rem; line-height: 1.65;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Body scroll kilidi */
+body.overlay-open { overflow: hidden; }
+
+/* Mobil düzenleme */
+@media (max-width: 600px) {
+    .detail-content { padding: 14px 16px 32px; border-radius: 16px 16px 0 0; max-height: 95vh; }
+    .detail-icon { width: 56px; height: 56px; border-radius: 14px; }
+    .detail-title { font-size: 1.1rem; }
+    .detail-play-btn { font-size: 0.9rem; padding: 12px 0; border-radius: 12px; }
+    .gallery-img { flex: 0 0 92%; border-radius: 10px; }
+    .detail-section h3 { font-size: 0.95rem; }
+    .detail-text { font-size: 0.85rem; }
+}
