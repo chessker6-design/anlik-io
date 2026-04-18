@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Oyun Detayı – anlık.io" />
+    <title>Oyun Detay | anlık.io</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-card: #262626;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --text-muted: #777;
+            --border: rgba(255, 255, 255, 0.08);
+            --font: 'Inter', sans-serif;
+            --transition: 0.2s ease-in-out;
+            --radius: 16px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font);
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* ── Top Navigation Bar ── */
+        .topbar {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(18, 18, 18, 0.85);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+            height: 56px;
+            display: flex; align-items: center; padding: 0 20px;
+        }
+        .back-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none;
+            font-weight: 600; font-size: 0.9rem;
+            transition: var(--transition);
+        }
+        .back-btn:hover { color: var(--accent-hover); }
+        .back-btn svg { width: 20px; height: 20px; }
+        .topbar-title {
+            flex: 1; text-align: center;
+            font-size: 0.85rem; font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+        .topbar-spacer { width: 80px; } /* dengelemek için */
+
+        /* ── Page Container ── */
+        .page { max-width: 720px; margin: 0 auto; padding: 0 20px 60px; }
+
+        /* ── Header: İkon + Başlık + Kategori ── */
+        .game-header {
+            display: flex; align-items: center; gap: 18px;
+            padding: 28px 0 22px;
+        }
+        .game-icon {
+            width: 88px; height: 88px;
+            border-radius: 22px;
+            object-fit: cover;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .header-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .game-name {
+            font-size: 1.5rem; font-weight: 800;
+            letter-spacing: -0.4px; line-height: 1.2;
+        }
+        .game-cat-tag {
+            display: inline-block; align-self: flex-start;
+            padding: 4px 12px; border-radius: 8px;
+            font-size: 0.7rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px;
+        }
+
+        /* ── HEMEN OYNA Butonu ── */
+        .play-btn {
+            display: block; width: 100%; padding: 16px 0;
+            text-align: center; text-decoration: none;
+            font-family: var(--font); font-weight: 800; font-size: 1.05rem;
+            letter-spacing: 0.8px;
+            color: #fff;
+            background: var(--accent);
+            border-radius: 14px;
+            margin-bottom: 32px;
+            transition: background 0.2s, transform 0.12s, box-shadow 0.2s;
+            box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35);
+        }
+        .play-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
+        }
+        .play-btn:active { transform: scale(0.98); }
+
+        /* ── Galeri – Yatay Kaydırılabilir ── */
+        .gallery {
+            display: flex; gap: 14px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 8px;
+            margin-bottom: 36px;
+            scrollbar-width: none;
+        }
+        .gallery::-webkit-scrollbar { display: none; }
+        .gallery-img {
+            flex: 0 0 88%;
+            aspect-ratio: 16 / 9;
+            border-radius: var(--radius);
+            object-fit: cover;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            scroll-snap-align: start;
+        }
+
+        /* ── Bölümler (Hakkında / Nasıl Oynanır) ── */
+        .section {
+            margin-bottom: 32px;
+        }
+        .section-title {
+            font-size: 1.15rem; font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+        }
+        .section-text {
+            font-size: 0.92rem; line-height: 1.75;
+            color: var(--text-secondary);
+        }
+
+        /* ── Divider ── */
+        .divider {
+            height: 1px; background: var(--border);
+            margin: 0 0 32px;
+        }
+
+        /* ── Yükleniyor ── */
+        .loading-state {
+            text-align: center; padding: 120px 20px;
+            color: var(--text-muted);
+        }
+        .loading-spinner {
+            width: 36px; height: 36px;
+            border: 3px solid rgba(255,255,255,0.08);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 18px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* ── Animasyonlar ── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .anim { animation: fadeUp 0.5s ease-out both; }
+        .anim-d1 { animation-delay: 0.05s; }
+        .anim-d2 { animation-delay: 0.12s; }
+        .anim-d3 { animation-delay: 0.2s; }
+        .anim-d4 { animation-delay: 0.28s; }
+        .anim-d5 { animation-delay: 0.36s; }
+
+        /* ── Mobil ── */
+        @media (max-width: 600px) {
+            .game-icon { width: 68px; height: 68px; border-radius: 18px; }
+            .game-name { font-size: 1.2rem; }
+            .play-btn { font-size: 0.95rem; padding: 14px 0; border-radius: 12px; }
+            .gallery-img { flex: 0 0 92%; border-radius: 12px; }
+            .section-title { font-size: 1.05rem; }
+            .section-text { font-size: 0.87rem; }
+            .game-header { padding: 22px 0 18px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Üst Bar -->
+    <nav class="topbar">
+        <a href="index.html" class="back-btn" id="backBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            Geri
+        </a>
+        <span class="topbar-title" id="topTitle">anlık.io</span>
+        <span class="topbar-spacer"></span>
+    </nav>
+
+    <div class="page" id="pageContent">
+        <!-- JS dolduracak -->
+        <div class="loading-state" id="loadingState">
+            <div class="loading-spinner"></div>
+            <p>Oyun bilgileri yükleniyor...</p>
+        </div>
+    </div>
+
+    <script>
+        const LIST_URL = "./games/oyun-listesi.json";
+        const pageContent = document.getElementById("pageContent");
+        const loadingState = document.getElementById("loadingState");
+        const topTitle = document.getElementById("topTitle");
+
+        /* ── Kategori Renkleri ── */
+        const COLORS = {
+            "aksiyon":   { bg: "rgba(239,68,68,0.2)",  border: "rgba(239,68,68,0.45)",  text: "#fca5a5" },
+            "zeka":      { bg: "rgba(168,85,247,0.2)",  border: "rgba(168,85,247,0.45)", text: "#d8b4fe" },
+            "arcade":    { bg: "rgba(34,211,238,0.2)",  border: "rgba(34,211,238,0.45)", text: "#a5f3fc" },
+            "yarış":     { bg: "rgba(251,191,36,0.2)",  border: "rgba(251,191,36,0.45)", text: "#fde68a" },
+            "strateji":  { bg: "rgba(52,211,153,0.2)",  border: "rgba(52,211,153,0.45)", text: "#a7f3d0" },
+            "macera":    { bg: "rgba(96,165,250,0.2)",  border: "rgba(96,165,250,0.45)", text: "#bfdbfe" },
+            "refleks":   { bg: "rgba(250,204,21,0.2)",  border: "rgba(250,204,21,0.45)", text: "#fef08a" },
+            "hayatta kalma": { bg: "rgba(74,222,128,0.2)", border: "rgba(74,222,128,0.45)", text: "#bbf7d0" },
+            "fizik":     { bg: "rgba(56,189,248,0.2)",  border: "rgba(56,189,248,0.45)", text: "#bae6fd" },
+        };
+        const DEF_COLOR = { bg: "rgba(255,255,255,0.08)", border: "transparent", text: "#aaa" };
+        function getColor(cat) {
+            return COLORS[(cat||"").toLocaleLowerCase("tr-TR").trim()] || DEF_COLOR;
+        }
+
+        /* ── Oyun Açıklamaları ── */
+        const META = {
+            "neon-kacis": {
+                desc: "Neon ışıklarla kaplı bir koridorda sonsuz bir kaçış! Engellerin arasından geç, reflekslerini test et ve en yüksek skoru kır. Hız arttıkça neon renkler değişir, ritim yükselir.",
+                howTo: "Yön tuşları veya ekrana dokunarak şeritler arasında geçiş yap. Engellere çarpmadan mümkün olduğunca uzağa koş. Hız zamanla otomatik artar."
+            },
+            "kripto-cokus": {
+                desc: "Kripto piyasaları çökerken stratejik al-sat yaparak hayatta kal! Grafikleri oku, dalgalanmaları tahmin et ve portföyünü korumaya çalış.",
+                howTo: "AL ve SAT butonlarıyla coin'leri zamanında takas et. Piyasa ani darbeler alabilir, dikkatli ol. Portföy değerini sıfırın üzerinde tut."
+            },
+            "siber-kalkan": {
+                desc: "Siber saldırıları savuşturarak sunucunu koru! Her dalga daha karmaşık saldırılar getirir. Güvenlik duvarını güçlendir ve virüsleri etkisiz hale getir.",
+                howTo: "Fare veya parmağınla düşman paketlerini engelle. Kalkanı stratejik olarak konumlandır. Sunucu sağlığı biterse oyun biter."
+            },
+            "drone-kurye": {
+                desc: "Drone'unla paketleri zamanında teslim et! Rüzgar, engeller ve yakıt yönetimi ile mücadele ederken teslimat rotanı optimize et.",
+                howTo: "Yön tuşları veya dokunmatik joystick ile drone'u kontrol et. Paketleri al ve hedef noktalara bırak. Yakıta ve zamana dikkat et."
+            },
+            "yapay-zeka-isyani": {
+                desc: "Yapay zeka kontrol dışına çıktı! Rogue AI birimlerini tespit edip etkisiz hale getir. Her seviyede AI daha akıllı ve tehlikeli hale gelir.",
+                howTo: "Haritada gezen AI birimlerini tespit et ve sistemlerini hack'le. Zamanında müdahale etmezsen yayılırlar. Tüm birimleri saf dışı bırak."
+            },
+            "kutle-cekim": {
+                desc: "Uzay boşluğunda çekim merkezleri oluşturarak gemiyi hedefe ulaştır! Gerçek fizik simülasyonu ile vektörel kuvvetleri kontrol et.",
+                howTo: "Ekrana tıklayarak çekim noktaları oluştur. Gemi bu noktaların çekim kuvvetinden etkilenir. Engellere çarpmadan hedef bölgeye ulaştır."
+            },
+            "yorunge-sapmasi": {
+                desc: "Gezegenler arası yörünge hesaplamaları yap! Uzay aracını doğru açı ve hızla fırlatarak hedef yörüngeye oturt.",
+                howTo: "Fırlatma açısını ve gücünü ayarla, sonra ateşle. Gezegenlerin çekim kuvvetlerini hesaba kat. Hedef yörüngeye girdiğinde seviye tamamlanır."
+            },
+            "suru-zekasi": {
+                desc: "Boid algoritması ile sürü davranışı simülasyonu! Kuşlar, balıklar veya drone sürülerini yönlendir. Doğadaki kolektif zekayı keşfet.",
+                howTo: "Fare veya parmağınla sürüyü yönlendir. Hedef noktalara sürüyü götür. Ayrılma, hizalanma ve birleşme parametrelerini optimize et."
+            },
+            "neon-sovalye": {
+                desc: "Neon zırhına bürünmüş bir şövalye olarak karanlık diyarlarda savaş! Kılıç komboları yap, düşmanları alt et ve labirentlerden geç.",
+                howTo: "WASD ile hareket et, fare/dokunmatik ile saldır. Düşmanları yenip ilerlemeye devam et. Güç yükseltmelerini topla."
+            },
+            "hiper-suruklenme": {
+                desc: "Yüksek hızda neon şehir sokaklarında sürüklenme yarışı! Drift yaparak turbo kazan, rakiplerini geride bırak.",
+                howTo: "Yön tuşları ile dön, gaz ve fren ile hızı kontrol et. Virajlarda drift yaparak turbo birik. Turboyu doğru zamanda kullan."
+            },
+            "siber-otoyol": {
+                desc: "Dijital otoyolda veri paketlerini taşı! Trafik arasında manevra yap, virüslü araçlardan kaç ve verileri güvenli limana ulaştır.",
+                howTo: "Sağ-sol tuşları ile şerit değiştir, yukarı ile hızlan. Kırmızı virüs araçlarından kaçın. Yeşil veri paketlerini topla."
+            },
+            "golge-suikastcisi": {
+                desc: "Gölgelerde gizlenerek hedeflerini sessizce etkisiz hale getir! Düşman görüş konilerine yakalanma, arkadan yaklaş. Premium stealth deneyimi.",
+                howTo: "WASD/Yön tuşları ile hareket et. Gölge bölgelerde daha hızlısın. Düşmanın arkasına yaklaşıp Boşluk/E ile saldır."
+            },
+            "cekirdek-erimesi": {
+                desc: "Nükleer reaktörün çekirdeği erime noktasına yaklaşıyor! Soğutma sistemlerini yönet, basınç vanalarını kontrol et ve felaketi engelle.",
+                howTo: "Kontrol panelindeki düğmeleri kullanarak sıcaklık ve basıncı dengede tut. Kırmızı bölgeye girersen çekirdek erir."
+            },
+            "boyut-yolcusu": {
+                desc: "Boyutlar arası geçiş yaparak bulmacaları çöz! Her boyutun kendine özgü fizik kuralları var.",
+                howTo: "Boyut geçiş butonuna basarak alternatif boyuta atla. Her boyutta farklı engeller var. İkisini kombine ederek çıkışa ulaş."
+            },
+            "piksel-sorfu": {
+                desc: "Piksel dalgaları üzerinde sörf yap! Retro grafiklerin modern gameplayle buluştuğu arcade oyunda en uzun mesafeyi kat et.",
+                howTo: "Yukarı/aşağı tuşları ile dalgada konumlan. Dalgaların tepesinde kalmaya çalış. Engelleri atla ve güçlendirmeleri topla."
+            },
+            "glitch-avcisi": {
+                desc: "Dijital dünyada glitch'ler ortaya çıkıyor! Bu bozuklukları tespit et ve düzelt. Her glitch farklı bir meydan okuma sunar.",
+                howTo: "Ekranda beliren glitch noktalarına tıkla/dokun. Zaman dolmadan tüm glitch'leri temizle."
+            },
+            "zaman-catlagi": {
+                desc: "Zaman akışında çatlaklar oluştu! Geçmiş ve gelecek arasında sıçrayarak bulmacaları çöz. Paradoks yaratmadan zaman çizgisini onar.",
+                howTo: "Zaman atlama butonuyla geçmiş ve gelecek arasında geçiş yap. Doğru sırayla hareket ederek çıkışı bul."
+            },
+            "lazer-agi": {
+                desc: "Lazer ışınlarından oluşan bir ağın içinden geç! Aynaları döndürerek lazer yolunu değiştir ve sensörleri aktive et.",
+                howTo: "Aynaları tıklayarak/dokunarak döndür. Lazer ışınını kaynaktan hedefe ulaştır. Tüm sensörleri aydınlat."
+            },
+            "viral-dongu": {
+                desc: "Bir virüsün yayılma döngüsünü kontrol et! Hücreleri enfekte ederken bağışıklık sisteminden kaç.",
+                howTo: "Hedef hücrelere tıklayarak virüsü yay. Beyaz kan hücrelerinden kaçın. Tüm hücreleri enfekte et."
+            },
+            "hafiza-korsani": {
+                desc: "Bellek bloklarını eşleyerek sistemin hafızasını hack'le! Klasik hafıza oyununun siber-punk temalı modern versiyonu.",
+                howTo: "Kartlara tıklayarak çevir. Eşleşen çiftleri bul. Minimum hamle sayısıyla tüm çiftleri eşleştir."
+            },
+            "itki-vektoru": {
+                desc: "Roketini güvenle platforma indir! Gerçekçi fizik ile yerçekimi, itki vektörü ve yakıt yönetimini dengede tut. Lunar Lander deneyimi.",
+                howTo: "W/Yukarı ile itki ver, A/D ile roketi döndür. Dikey ve yatay hızı düşük tutarak platforma yumuşak iniş yap. Yakıt sınırlı!"
+            },
+            "kisa-devre": {
+                desc: "PCB üzerindeki pinleri doğru kablolarla bağla! Flow Free tarzı bulmaca mekaniği ile devreyi tamamla.",
+                howTo: "Aynı renkteki iki pini fareyle veya parmağınla birbirine bağla. Yollar kesişemez. Tüm pinler bağlı ve ızgara dolu olmalı."
+            },
+            "taktik-yorunge": {
+                desc: "İki kişilik topçu savaşı! Açıyı ve gücü ayarlayıp rakibinin tankını vur. Rüzgar her turda değişir, zemin tahrip edilir.",
+                howTo: "Oyuncu 1: WASD + Boşluk | Oyuncu 2: Yön tuşları + Enter. Açıyı ve atış gücünü ayarla, rüzgarı hesaba kat!"
+            },
+            "frekans-avcisi": {
+                desc: "Hedef sinyalin frekansını ve genliğini eşleştir! Osiloskop ekranında dalgaları üst üste getirerek rezonansa ulaş.",
+                howTo: "W/S ile genliği, A/D ile frekansı ayarla. Yeşil dalganı mavi hedef dalgayla eşleştir. %95+ eşleşmede rezonans dolmaya başlar."
+            },
+            "tartarus-bolum-1": {
+                desc: "Proje TARTARUS'un ilk bölümü: Kayıp Kapı. Gizemli bir uzay istasyonunda uyanıyorsun. Terminal ekranlarından ipuçlarını takip et ve enerji şebekesini onar.",
+                howTo: "Terminal ekranındaki ipuçlarını oku. Enerji düğümlerini doğru sırayla bağlayarak güç yönlendirme bulmacasını çöz."
+            },
+            "tartarus-bolum-2": {
+                desc: "TARTARUS Bölüm 2: Derin Karanlık. İstasyonun derinliklerinde düşman varlıklar dolaşıyor. Radarını kullanarak gizlice ilerle.",
+                howTo: "Radar ekranına bakarak düşmanların konumunu tespit et. Görüş alanlarına girmeden sessizce hedef noktaya ulaş."
+            },
+            "tartarus-bolum-3": {
+                desc: "TARTARUS Finali: Sistem Çöküşü. İstasyonun AI'ı kontrolü ele geçirdi! Boss ile yüzleş. Bullet Hell tarzı hayatta kalma savaşı.",
+                howTo: "Joystick veya WASD ile hareket et. Düşman mermilerinden kaçınarak hayatta kal. Boss'un zayıf noktalarını vur."
+            },
+            "void-runner": {
+                desc: "Boşlukta sonsuz bir koşu! Platformlar arasında atlayarak ilerle. Her atlamada yerçekimi değişebilir.",
+                howTo: "Boşluk tuşu veya ekrana dokunarak atla. Platformları kaçırma! Bazı platformlar hareket eder veya kaybolur."
+            },
+            "yercekimi-darbesi": {
+                desc: "Yerçekimini silah olarak kullan! Nesneleri çekerek ve iterek düşmanları alt et. Fizik tabanlı aksiyon ve bulmaca karışımı.",
+                howTo: "Fare/parmakla nesneleri çek ve fırlat. Düşmanlara isabet ettir veya engelleri yıkarak yol aç."
+            },
+            "sinyal-kulesi-1-uyanis": {
+                desc: "Sinyal Kulesi serisi başlıyor! Gizemli sinyaller alan bir kuledeki teknisyen olarak uyanıyorsun. Sinyalleri çöz ve gerçeği keşfet.",
+                howTo: "Terminal bulmacalarını çöz. Sinyal frekanslarını ayarla ve mesajları deşifre et."
+            },
+            "sinyal-kulesi-2-kacis": {
+                desc: "Sinyal Kulesi II: Kuleden kaçış zamanı! Tehlike yaklaşıyor, sinyaller seni yönlendiriyor.",
+                howTo: "Platform ve refleks mekanikleriyle engelleri aş. Sinyallerin yönlendirmelerine kulak ver."
+            },
+            "sinyal-kulesi-3-son-yayin": {
+                desc: "Sinyal Kulesi Finali: Son Yayın. Kuleye geri dönüp son mesajı göndermelisin.",
+                howTo: "Önceki bölümlerdeki yeteneklerin hepsini kullan. Boss mekaniklerini öğren ve son yayını gerçekleştir."
+            }
+        };
+        const DEF_DESC = "Heyecan dolu bir oyun deneyimi seni bekliyor! Reflekslerini ve stratejini test et.";
+        const DEF_HOWTO = "Klavye (WASD / Yön tuşları) veya dokunmatik ekran kontrolleri ile oyna. Detaylar oyun içinde açıklanır.";
+
+        /* ── Başlat ── */
+        (async () => {
+            const params = new URLSearchParams(location.search);
+            const gameId = params.get("id");
+
+            if (!gameId) {
+                location.href = "index.html";
+                return;
+            }
+
+            try {
+                const res = await fetch(`${LIST_URL}?t=${Date.now()}`, { cache: "no-store" });
+                const raw = await res.json();
+                const list = Array.isArray(raw) ? raw : (raw.games || []);
+
+                const game = list.find(g => g.id === gameId);
+                if (!game) {
+                    loadingState.innerHTML = "<p>Oyun bulunamadı.</p>";
+                    return;
+                }
+
+                const id    = game.id;
+                const title = game.title || game.isim || "Oyun";
+                const cat   = game.category || game.kategori || "Genel";
+                const img   = game.image || game.resim || `https://picsum.photos/seed/${id}/400/400`;
+                const url   = game.url || `./games/${id}/game.html`;
+                const meta  = META[id] || {};
+                const color = getColor(cat);
+
+                document.title = `${title} | anlık.io`;
+                topTitle.textContent = title;
+
+                loadingState.remove();
+
+                pageContent.innerHTML = `
+                    <!-- Header -->
+                    <div class="game-header anim">
+                        <img class="game-icon" src="${img}" alt="${title}">
+                        <div class="header-text">
+                            <h1 class="game-name">${title}</h1>
+                            <span class="game-cat-tag"
+                                style="background:${color.bg}; border:1px solid ${color.border}; color:${color.text};"
+                            >${cat}</span>
+                        </div>
+                    </div>
+
+                    <!-- HEMEN OYNA -->
+                    <a href="${url}" class="play-btn anim anim-d1">HEMEN OYNA</a>
+
+                    <!-- Galeri -->
+                    <div class="gallery anim anim-d2">
+                        <img class="gallery-img" src="https://picsum.photos/seed/${id}-ss1/800/450" alt="${title} Ekran Görüntüsü 1">
+                        <img class="gallery-img" src="https://picsum.photos/seed/${id}-ss2/800/450" alt="${title} Ekran Görüntüsü 2">
+                    </div>
+
+                    <!-- Hakkında -->
+                    <div class="section anim anim-d3">
+                        <h3 class="section-title">Bu Oyun Hakkında</h3>
+                        <p class="section-text">${meta.desc || DEF_DESC}</p>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- Nasıl Oynanır -->
+                    <div class="section anim anim-d4">
+                        <h3 class="section-title">Nasıl Oynanır?</h3>
+                        <p class="section-text">${meta.howTo || DEF_HOWTO}</p>
+                    </div>
+                `;
+
+            } catch (err) {
+                console.error(err);
+                loadingState.innerHTML = "<p>Hata oluştu.</p>";
+            }
+        })();
+    </script>
+</body>
+</html>
